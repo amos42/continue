@@ -1,0 +1,13 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Continue
+Bundle-SymbolicName: com.github.continuedev.continueeclipseextension;singleton:=true
+Bundle-Version: 0.0.1
+Bundle-Activator: com.github.continuedev.continueeclipseextension.Activator
+Bundle-Vendor: com.github.continuedev
+Require-Bundle: org.eclipse.ui,
+ org.eclipse.core.runtime
+Bundle-RequiredExecutionEnvironment: JavaSE-1.7
+Automatic-Module-Name: com.github.continuedev.continueeclipseextension
+Import-Package: jakarta.inject;version="[2.0.0,3.0.0)"
+Bundle-ActivationPolicy: lazy
