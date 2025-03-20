@@ -9,7 +9,7 @@ import org.eclipse.core.resources.IResourceChangeEvent;
 import org.eclipse.core.resources.IResourceChangeListener;
 import org.eclipse.core.resources.IResourceFilterDescription;
 import org.eclipse.core.runtime.CoreException;
-import com.github.continuedev.continueeclipsejextension.services.ContinuePluginService;
+import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
 
 public class AsyncFileSaveListener implements IResourceChangeListener {
     

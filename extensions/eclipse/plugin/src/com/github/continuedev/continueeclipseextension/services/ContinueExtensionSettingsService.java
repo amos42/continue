@@ -1,9 +1,9 @@
 package com.github.continuedev.continueeclipseextension.services;
 
-import com.github.continuedev.continueeclipseextension.continuue.CoreMessenger;
-import com.github.continuedev.continueeclipseextension.continuue.CoreMessengerManager;
-import com.github.continuedev.continueeclipseextension.continuue.DiffManager;
-import com.github.continuedev.continueeclipseextension.continuue.IdeProtocolClient;
+import com.github.continuedev.continueeclipseextension.CoreMessenger;
+import com.github.continuedev.continueeclipseextension.CoreMessengerManager;
+import com.github.continuedev.continueeclipseextension.DiffManager;
+import com.github.continuedev.continueeclipseextension.IdeProtocolClient;
 import com.github.continuedev.continueeclipseextension.toolWindow.ContinuePluginToolWindowFactory;
 import com.github.continuedev.continueeclipseextension.toolWindow.ContinuePluginToolWindowFactory.ContinuePluginWindow;
 import com.github.continuedev.continueeclipseextension.utils.Utils;

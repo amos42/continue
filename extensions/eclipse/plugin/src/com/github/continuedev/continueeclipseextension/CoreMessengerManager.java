@@ -1,7 +1,7 @@
 package com.github.continuedev.continueeclipseextension;
 
 import com.github.continuedev.continueeclipseextension.services.TelemetryService;
-import com.github.continuedev.continueeclipseextension.utils.getMachineUniqueID;
+import com.github.continuedev.continueeclipseextension.utils.*;
 import com.intellij.ide.plugins.PluginManager;
 import com.intellij.openapi.components.service;
 import com.intellij.openapi.extensions.PluginId;
@@ -9,7 +9,7 @@ import com.intellij.openapi.project.Project;
 import java.nio.file.Paths;
 import kotlinx.coroutines.*;
 
-class CoreMessengerManager {
+public class CoreMessengerManager {
     private Project project;
     private IdeProtocolClient ideProtocolClient;
     private CoroutineScope coroutineScope;
