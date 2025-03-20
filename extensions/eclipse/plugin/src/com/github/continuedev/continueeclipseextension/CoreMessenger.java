@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
+import java.util.function.Consumer;
 
 public class CoreMessenger {
 
@@ -136,7 +137,8 @@ public class CoreMessenger {
         }
     }
     
-    public void write(@NotNull String message) {
+    //public void write(@NotNull String message) {
+    public void write(String message) {
         try {
             writer.write(message + "\r\n");
             writer.flush();
@@ -145,7 +147,8 @@ public class CoreMessenger {
         }
     }
 
-    public void request(@NotNull String messageType, @Nullable Object data, @Nullable String messageId, @NotNull Consumer<Object> onResponse) {
+    //public void request(@NotNull String messageType, @Nullable Object data, @Nullable String messageId, @NotNull Consumer<Object> onResponse) {
+    public void request(String messageType, Object data, String messageId, Consumer<Object> onResponse) {
         String id = messageId != null ? messageId : uuid();
         String message =
                 gson.toJson(Map.of("messageId", id, "messageType", messageType, "data", data));
@@ -153,7 +156,8 @@ public class CoreMessenger {
         write(message);
     }
 
-    private void handleMessage(@NotNull String json) {
+    //private void handleMessage(@NotNull String json) {
+    private void handleMessage(String json) {
         Map<String, Object> responseMap = gson.fromJson(json, Map.class);
         String messageId = (String) responseMap.get("messageId");
         String messageType = (String) responseMap.get("messageType");

@@ -35,7 +35,7 @@ public class AsyncFileSaveListener implements IResourceChangeListener {
                         if (delta.getResource() instanceof IFile) {
                             IFile file = (IFile) delta.getResource();
                             if (configFilePatterns.stream().anyMatch(pattern -> file.getFullPath().toOSString().endsWith(pattern))) {
-                                continuePluginService.coreMessenger.request("config/reload", null, null, _ -> {});
+                                continuePluginService.getCoreMessenger().request("config/reload", null, null, _ -> {});
                                 return false; // 더 이상 하위 리소스 방문하지 않음
                             }
                         }
