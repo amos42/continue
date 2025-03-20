@@ -8,8 +8,8 @@ import org.eclipse.jface.text.source.IURLInputStreamProvider;
 import org.eclipse.wst.json.core.schema.ISchemaFileProvider;
 import org.eclipse.wst.json.core.schema.ISchemaProviderFactory;
 import org.eclipse.wst.json.core.schema.SchemaType;
-import com.github.continuedev.continueeclipsejextension.activities.ContinuePluginStartupActivity;
-import com.github.continuedev.continueeclipsejextension.constants.ContinueConstants;
+import com.github.continuedev.continueeclipseextension.activities.ContinuePluginStartupActivity;
+import com.github.continuedev.continueeclipseextension.constants.ContinueConstants;
 
 import java.io.File;
 import java.io.FileOutputStream;

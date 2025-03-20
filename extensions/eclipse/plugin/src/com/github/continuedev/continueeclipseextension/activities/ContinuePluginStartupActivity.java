@@ -1,286 +1,183 @@
 package com.github.continuedev.continueeclipseextension.activities;
 
-import com.intellij.openapi.fileEditor.FileEditorManagerListener
-import com.github.continuedev.continueeclipsejextension.auth.AuthListener
-import com.github.continuedev.continueeclipsejextension.auth.ContinueAuthService
-import com.github.continuedev.continueeclipsejextension.auth.ControlPlaneSessionInfo
-import com.github.continuedev.continueeclipsejextension.constants.getContinueGlobalPath
-import com.github.continuedev.continueeclipsejextension.`continue`.*
-import com.github.continuedev.continueeclipsejextension.listeners.ContinuePluginSelectionListener
-import com.github.continuedev.continueeclipsejextension.services.ContinueExtensionSettings
-import com.github.continuedev.continueeclipsejextension.services.ContinuePluginService
-import com.github.continuedev.continueeclipsejextension.services.SettingsListener
-import com.github.continuedev.continueeclipsejextension.utils.toUriOrNull
-import com.intellij.openapi.actionSystem.KeyboardShortcut
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.ApplicationNamesInfo
-import com.intellij.openapi.components.ServiceManager
-import com.intellij.openapi.editor.EditorFactory
-import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.keymap.KeymapManager
-import com.intellij.openapi.project.DumbAware
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.startup.StartupActivity
-import com.intellij.openapi.util.io.StreamUtil
-import com.intellij.openapi.vfs.LocalFileSystem
-import kotlinx.coroutines.*
-import java.io.*
-import java.nio.charset.StandardCharsets
-import java.nio.file.Paths
-import javax.swing.*
-import com.intellij.openapi.components.service
-import com.intellij.openapi.module.ModuleManager
-import com.intellij.openapi.roots.ModuleRootManager
-import com.intellij.openapi.vfs.VirtualFileManager
-import com.intellij.openapi.vfs.newvfs.BulkFileListener
-import com.intellij.openapi.vfs.newvfs.events.VFileEvent
-import com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent
-import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent
-import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent
-import com.intellij.ide.ui.LafManagerListener
-import com.intellij.openapi.vfs.VirtualFile
+import com.github.continuedev.continueeclipseextension.auth.AuthListener;
+import com.github.continuedev.continueeclipseextension.auth.ContinueAuthService;
+import com.github.continuedev.continueeclipseextension.auth.ControlPlaneSessionInfo;
+import com.github.continuedev.continueeclipseextension.constants.ContinueConstants;
+import com.github.continuedev.continueeclipseextension.listener.ContinuePluginSelectionListener;
+import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
+import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
+import com.github.continuedev.continueeclipseextension.utils.FileUtils;
 
-fun showTutorial(project: Project) {
-    val tutorialFileName = getTutorialFileName()
+import org.eclipse.jface.action.Action;
+import org.eclipse.jface.action.IAction;
+import org.eclipse.jface.action.IToolBarManager;
+import org.eclipse.jface.action.KeyBinding;
+import org.eclipse.jface.action.KeyStroke;
+import org.eclipse.jface.bindings.keys.KeySequence;
+import org.eclipse.jface.bindings.keys.ParseException;
+import org.eclipse.jface.resource.ImageDescriptor;
+import org.eclipse.swt.widgets.Display;
+import org.eclipse.ui.IEditorPart;
+import org.eclipse.ui.IFileEditorInput;
+import org.eclipse.ui.IPageLayout;
+import org.eclipse.ui.IPerspectiveDescriptor;
+import org.eclipse.ui.IPerspectiveListener;
+import org.eclipse.ui.IStartup;
+import org.eclipse.ui.IWorkbench;
+import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.PartInitException;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.plugin.AbstractUIPlugin;
+import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.texteditor.KeyBindingAction;
+import org.eclipse.ui.views.contentoutline.ContentOutline;
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.ui.part.EditorPart;
+import org.eclipse.ui.texteditor.AbstractTextEditor;
 
-    ContinuePluginStartupActivity::class.java.getClassLoader().getResourceAsStream(tutorialFileName)
-        .use { `is` ->
-            if (`is` == null) {
-                throw IOException("Resource not found: $tutorialFileName")
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class ContinuePluginStartupActivity implements IStartup {
+
+    @Override
+    public void earlyStartup() {
+        IWorkbench workbench = PlatformUI.getWorkbench();
+        workbench.addPerspectiveListener(new IPerspectiveListener() {
+            @Override
+            public void perspectiveActivated(IWorkbenchPage page, IPerspectiveDescriptor perspective) {
+                removeKeyBindingFromActions("J", "control");
+                removeKeyBindingFromActions("shift J", "control");
+                removeKeyBindingFromActions("I", "control");
+                initializePlugin(page);
+
+                // Eclipse와 IntelliJ의 불필요한 차이를 제거하거나 대체하는 주석.
+                // 이를 실제 Eclipse의 기능에 맞게 코딩해야 합니다.
             }
-            var content = StreamUtil.readText(`is`, StandardCharsets.UTF_8)
 
-            // All jetbrains will use J instead of L
-            content = content.replace("[Cmd + L]", "[Cmd + J]")
-            content = content.replace("[Cmd + Shift + L]", "[Cmd + Shift + J]")
-
-            if (!System.getProperty("os.name").lowercase().contains("mac")) {
-                content = content.replace("[Cmd + J]", "[Ctrl + J]")
-                content = content.replace("[Cmd + Shift + J]", "[Ctrl + Shift + J]")
-                content = content.replace("[Cmd + I]", "[Ctrl + I]")
-                content = content.replace("⌘", "⌃")
+            @Override
+            public void perspectiveChanged(IWorkbenchPage page, IPerspectiveDescriptor perspective, String changeId) {
+                // Placeholder for perspective changed
             }
-            val filepath = Paths.get(getContinueGlobalPath(), tutorialFileName).toString()
-            File(filepath).writeText(content)
-            val virtualFile = LocalFileSystem.getInstance().findFileByPath(filepath)
+        });
+    }
 
-            ApplicationManager.getApplication().invokeLater {
-                if (virtualFile != null) {
-                    FileEditorManager.getInstance(project).openFile(virtualFile, true)
-                }
-            }
+    private void removeKeyBindingFromActions(String key, String modifier) {
+        IAction action = AbstractTextEditor.getActionRegistry().getAction("continue." + key.toLowerCase());
+        if (action == null || !(action instanceof KeyBindingAction)) return;
+
+        KeyBindingAction keyBindingAction = (KeyBindingAction) action;
+        KeyBinding keyBinding = keyBindingAction.getKeyBinding();
+        if (keyBinding != null && keyBinding.getKeySequence().equals(getKeySequence(modifier + " " + key))) {
+            keyBindingAction.setKeyBinding(null);
         }
-}
-
-private fun getTutorialFileName(): String {
-    val appName = ApplicationNamesInfo.getInstance().fullProductName.lowercase()
-    return when {
-        appName.contains("intellij") -> "continue_tutorial.java"
-        appName.contains("pycharm") -> "continue_tutorial.py"
-        appName.contains("webstorm") -> "continue_tutorial.ts"
-        else -> "continue_tutorial.py" // Default to Python tutorial
-    }
-}
-
-class ContinuePluginStartupActivity : StartupActivity, DumbAware {
-
-    override fun runActivity(project: Project) {
-        removeShortcutFromAction(getPlatformSpecificKeyStroke("J"))
-        removeShortcutFromAction(getPlatformSpecificKeyStroke("shift J"))
-        removeShortcutFromAction(getPlatformSpecificKeyStroke("I"))
-        initializePlugin(project)
+        // 명시적인 KeyStroke 제거는 Eclipse IDE에서 제공하는 방법으로 대체해야 합니다.
     }
 
-    private fun getPlatformSpecificKeyStroke(key: String): String {
-        val osName = System.getProperty("os.name").toLowerCase()
-        val modifier = if (osName.contains("mac")) "meta" else "control"
-        return "$modifier $key"
-    }
-
-    private fun removeShortcutFromAction(shortcut: String) {
-        val keymap = KeymapManager.getInstance().activeKeymap
-        val keyStroke = KeyStroke.getKeyStroke(shortcut)
-        val actionIds = keymap.getActionIds(keyStroke)
-
-        // If Continue has been re-assigned to another key, don't remove the shortcut
-        if (!actionIds.any { it.startsWith("continue") }) {
-            return
-        }
-
-        for (actionId in actionIds) {
-            if (actionId.startsWith("continue")) {
-                continue
-            }
-            val shortcuts = keymap.getShortcuts(actionId)
-            for (shortcut in shortcuts) {
-                if (shortcut is KeyboardShortcut && shortcut.firstKeyStroke == keyStroke) {
-                    keymap.removeShortcut(actionId, shortcut)
-                }
-            }
+    private KeySequence getKeySequence(String shortcut) {
+        try {
+            return KeySequence.getInstance(shortcut);
+        } catch (ParseException e) {
+            e.printStackTrace();
+            return null;
         }
     }
 
-    private fun initializePlugin(project: Project) {
-        val coroutineScope = CoroutineScope(Dispatchers.IO)
-        val continuePluginService = ServiceManager.getService(
-            project,
-            ContinuePluginService::class.java
-        )
+    private void initializePlugin(IWorkbenchPage page) {
+        // 여기에 코루틴과 같은 비동기 처리는 있는 대로 Eclipse 방식의 스레딩으로 작성해야 합니다.
+        continuePluginService(page.getProject());
+        settingsListener(page.getProject());
+        // 파일 변경 리스너 같은 부분도 Eclipse의 리소스 변경 감지 시스템을 사용해야 합니다.
+        // 같은 개념이지만 구현이 완전히 다릅니다.
+    }
 
-        coroutineScope.launch {
-            val settings =
-                ServiceManager.getService(ContinueExtensionSettings::class.java)
-            if (!settings.continueState.shownWelcomeDialog) {
-                settings.continueState.shownWelcomeDialog = true
-                // Open tutorial file
-                showTutorial(project)
+    private void continuePluginService(IProject project) {
+        ContinuePluginService pluginService = new ContinuePluginService();
+        pluginService.init(project);
+
+        ContinueExtensionSettings settings = new ContinueExtensionSettings();
+        if (!settings.getState().isShownWelcomeDialog()) {
+            settings.getState().setShownWelcomeDialog(true);
+            showTutorial(project);
+        }
+
+        // 위와 같은 구조로 코루틴 부분을 Eclipse 스레딩으로 재구성해야 합니다.
+        // 예를 들어, Display.getDefault().asyncExec(Runnable runnable) 사용 등.
+    }
+
+    private void settingsListener(IProject project) {
+        // Eclipse 부스체 메시지 버스와 같은 대체 코드를 추가합니다.
+        // 이 코드는 Eclipse의 설정 변경 감지를 위한 것입니다.
+    }
+
+    private void showTutorial(IProject project) {
+        String tutorialFileName = getTutorialFileName();
+        InputStream is = this.getClass().getClassLoader().getResourceAsStream(tutorialFileName);
+        if (is == null) {
+            throw new IOException("Resource not found: " + tutorialFileName);
+        }
+
+        try {
+            String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+
+            content = content.replace("[Cmd + L]", "[Cmd + J]");
+            content = content.replace("[Cmd + Shift + L]", "[Cmd + Shift + J]");
+
+            if (!System.getProperty("os.name").toLowerCase().contains("mac")) {
+                content = content.replace("[Cmd + J]", "[Ctrl + J]");
+                content = content.replace("[Cmd + Shift + J]", "[Ctrl + Shift + J]");
+                content = content.replace("[Cmd + I]", "[Ctrl + I]");
+                content = content.replace("⌘", "⌃");
             }
 
-            settings.addRemoteSyncJob()
+            String filepath = Paths.get(ContinueConstants.getContinueGlobalPath(), tutorialFileName).toString();
+            File file = new File(filepath);
+            Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
 
-            val ideProtocolClient = IdeProtocolClient(
-                continuePluginService,
-                coroutineScope,
-                project
-            )
-
-            val diffManager = DiffManager(project)
-
-            continuePluginService.diffManager = diffManager
-            continuePluginService.ideProtocolClient = ideProtocolClient
-
-            // Listen to changes to settings so the core can reload remote configuration
-            val connection = ApplicationManager.getApplication().messageBus.connect()
-            connection.subscribe(SettingsListener.TOPIC, object : SettingsListener {
-                override fun settingsUpdated(settings: ContinueExtensionSettings.ContinueState) {
-                    continuePluginService.coreMessenger?.request("config/ideSettingsUpdate", settings, null) { _ -> }
-                    continuePluginService.sendToWebview(
-                        "didChangeIdeSettings", mapOf(
-                            "settings" to mapOf(
-                                "remoteConfigServerUrl" to settings.remoteConfigServerUrl,
-                                "remoteConfigSyncPeriod" to settings.remoteConfigSyncPeriod,
-                                "userToken" to settings.userToken,
-                                "enableControlServerBeta" to settings.enableContinueTeamsBeta
-                            )
-                        )
-                    )
-                }
-            })
-
-            // Handle file changes and deletions - reindex
-            connection.subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener {
-                override fun after(events: List<VFileEvent>) {
-                    // Collect all relevant URIs for deletions
-                    val deletedURIs = events.filterIsInstance<VFileDeleteEvent>()
-                        .mapNotNull { event -> event.file.toUriOrNull() }
-
-                    // Send "files/deleted" message if there are any deletions
-                    if (deletedURIs.isNotEmpty()) {
-                        val data = mapOf("uris" to deletedURIs)
-                        continuePluginService.coreMessenger?.request("files/deleted", data, null) { _ -> }
-                    }
-
-                    // Collect all relevant URIs for content changes
-                    val changedURIs = events.filterIsInstance<VFileContentChangeEvent>()
-                        .mapNotNull { event -> event.file.toUriOrNull() }
-
-                    // Notify core of content changes
-                    if (changedURIs.isNotEmpty()) {
-                        val data = mapOf("uris" to changedURIs)
-                        continuePluginService.coreMessenger?.request("files/changed", data, null) { _ -> }
-                    }
-
-                    events.filterIsInstance<VFileCreateEvent>()
-                        .mapNotNull { event -> event.file?.toUriOrNull() }
-                        .takeIf { it.isNotEmpty() }?.let {
-                            val data = mapOf("uris" to it)
-                            continuePluginService.coreMessenger?.request("files/created", data, null) { _ -> }
+            IWorkbenchPage workbenchPage = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
+            if (workbenchPage != null) {
+                IFile resourceFile = ResourcesPlugin.getWorkspace().getRoot().getFile(new Path(filepath));
+                if (resourceFile.exists()) {
+                    Display.getDefault().asyncExec(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                IDE.openEditor(workbenchPage, resourceFile);
+                            } catch (PartInitException e) {
+                                e.printStackTrace();
+                            }
                         }
-
-                    // TODO: Missing handling of copying files, renaming files, etc.
+                    });
                 }
-            })
-
-
-            connection.subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, object : FileEditorManagerListener {
-                override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
-                    file.toUriOrNull()?.let { uri ->
-                        val data = mapOf("uris" to listOf(uri))
-                        continuePluginService.coreMessenger?.request("files/closed", data, null) { _ -> }
-                    }
-                }
-                override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
-                    file.toUriOrNull()?.let { uri ->
-                        val data = mapOf("uris" to listOf(uri))
-                        continuePluginService.coreMessenger?.request("files/opened", data, null) { _ -> }
-                    }
-                }
-            })
-
-
-
-            // Listen for theme changes
-            connection.subscribe(LafManagerListener.TOPIC, LafManagerListener {
-                val colors = GetTheme().getTheme();
-                continuePluginService.sendToWebview(
-                    "jetbrains/setColors",
-                    colors
-                )
-            })
-
-            // Listen for clicking settings button to start the auth flow
-            val authService = service<ContinueAuthService>()
-            val initialSessionInfo = authService.loadControlPlaneSessionInfo()
-
-            if (initialSessionInfo != null) {
-                val data = mapOf(
-                    "sessionInfo" to initialSessionInfo
-                )
-                continuePluginService.coreMessenger?.request("didChangeControlPlaneSessionInfo", data, null) { _ -> }
-                continuePluginService.sendToWebview("didChangeControlPlaneSessionInfo", data)
             }
 
-            connection.subscribe(AuthListener.TOPIC, object : AuthListener {
-                override fun startAuthFlow() {
-                    authService.startAuthFlow(project, false)
-                }
-
-                override fun handleUpdatedSessionInfo(sessionInfo: ControlPlaneSessionInfo?) {
-                    val data = mapOf(
-                        "sessionInfo" to sessionInfo
-                    )
-                    continuePluginService.coreMessenger?.request(
-                        "didChangeControlPlaneSessionInfo",
-                        data,
-                        null
-                    ) { _ -> }
-                    continuePluginService.sendToWebview("didChangeControlPlaneSessionInfo", data)
-                }
-            })
-
-            val listener =
-                ContinuePluginSelectionListener(
-                    coroutineScope,
-                )
-
-            // Reload the WebView
-            continuePluginService?.let { pluginService ->
-                val allModulePaths = ModuleManager.getInstance(project).modules
-                    .flatMap { module -> ModuleRootManager.getInstance(module).contentRoots.mapNotNull { it.toUriOrNull() } }
-
-                val topLevelModulePaths = allModulePaths
-                    .filter { modulePath -> allModulePaths.none { it != modulePath && modulePath.startsWith(it) } }
-
-                pluginService.workspacePaths = topLevelModulePaths.toTypedArray()
-            }
-
-            EditorFactory.getInstance().eventMulticaster.addSelectionListener(
-                listener,
-                ContinuePluginDisposable.getInstance(project)
-            )
-
-            val coreMessengerManager = CoreMessengerManager(project, ideProtocolClient, coroutineScope)
-            continuePluginService.coreMessengerManager = coreMessengerManager
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
+
+    private String getTutorialFileName() {
+        String appName = "eclipse"; // 시작할 때 이 값을 설정할 때 주의하기 바랍니다. 또는 디스패치 시스템을 통해 동적으로 받아야 합니다.
+        return switch (appName.toLowerCase()) {
+            case "intellij" -> "continue_tutorial.java";
+            case "pycharm" -> "continue_tutorial.py";
+            case "webstorm" -> "continue_tutorial.ts";
+            default -> "continue_tutorial.py"; // 기본값으로 Python 튜토리얼.
+        };
+    }
+
+    // 자신이 작성한 ModuleManager, ModuleRootManager, LafManagerListener 등을 대체하거나 구현해야 합니다.
+    // 주언의 대부분의 기능은 Eclipse의 제공하는 API나 기능으로 재구성되어야 합니다.
 }

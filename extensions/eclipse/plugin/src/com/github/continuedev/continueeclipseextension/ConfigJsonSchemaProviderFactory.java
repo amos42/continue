@@ -1,7 +1,7 @@
 package com.github.continuedev.continueeclipseextension;
 
-import com.github.continuedev.continueeclipsejextension.activities.ContinuePluginStartupActivity;
-import com.github.continuedev.continueeclipsejextension.constants.getContinueGlobalPath;
+import com.github.continuedev.continueeclipseextension.activities.ContinuePluginStartupActivity;
+import com.github.continuedev.continueeclipseextension.constants.getContinueGlobalPath;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.io.StreamUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;

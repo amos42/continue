@@ -1,6 +1,6 @@
 package com.github.continuedev.continueeclipseextension;
 
-import com.github.continuedev.continueeclipsejextension.services.ContinuePluginService;
+import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
 import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.swt.SWT;
