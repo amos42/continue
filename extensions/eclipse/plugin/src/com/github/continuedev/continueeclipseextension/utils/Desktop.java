@@ -15,200 +15,218 @@
  */
 package com.github.continuedev.continueeclipseextension.utils;
 
-import org.apache.commons.lang3.SystemUtils
-import org.slf4j.LoggerFactory
-import java.io.File
-import java.io.IOException
-import java.net.URI
+import org.apache.commons.lang3.SystemUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-object Desktop {
-    private val LOG = LoggerFactory.getLogger(Desktop::class.java)
+import java.awt.Desktop;
+import java.io.File;
+import java.io.IOException;
+import java.net.URI;
 
-    fun browse(uri: URI): Boolean {
+public class Desktop {
+    private static final Logger LOG = LoggerFactory.getLogger(Desktop.class);
+    private static Desktop instance;
+
+    private Desktop() {
+        // Singleton instance cannot be instantiated
+    }
+
+    public static synchronized Desktop getInstance() {
+        if (instance == null) {
+            instance = new Desktop();
+        }
+        return instance;
+    }
+
+    public boolean browse(URI uri) {
         if (browseDESKTOP(uri)) {
-            return true
+            return true;
         }
 
         if (openSystemSpecific(uri.toString())) {
-            return true
+            return true;
         }
 
-        LOG.warn("failed to browse {}", uri)
-        return false
+        LOG.warn("failed to browse {}", uri);
+        return false;
     }
 
-    fun open(file: File): Boolean {
+    public boolean open(File file) {
         if (openDESKTOP(file)) {
-            return true
+            return true;
         }
 
-        if (openSystemSpecific(file.path)) {
-            return true
+        if (openSystemSpecific(file.getPath())) {
+            return true;
         }
 
-        LOG.warn("failed to open {}", file.absolutePath)
-        return false
+        LOG.warn("failed to open {}", file.getAbsolutePath());
+        return false;
     }
 
-    fun edit(file: File): Boolean {
+    public boolean edit(File file) {
         if (editDESKTOP(file)) {
-            return true
+            return true;
         }
 
-        if (openSystemSpecific(file.path)) {
-            return true
+        if (openSystemSpecific(file.getPath())) {
+            return true;
         }
 
-        LOG.warn("failed to edit {}", file.absolutePath)
-        return false
+        LOG.warn("failed to edit {}", file.getAbsolutePath());
+        return false;
     }
 
-    private fun openSystemSpecific(what: String): Boolean {
+    private boolean openSystemSpecific(String what) {
         if (SystemUtils.IS_OS_LINUX) {
             if (isXDG() && runCommand("xdg-open", "%s", what)) {
-                return true
+                return true;
             }
             if (isKDE() && runCommand("kde-open", "%s", what)) {
-                return true
+                return true;
             }
             if (isGNOME() && runCommand("gnome-open", "%s", what)) {
-                return true
+                return true;
             }
             if (runCommand("kde-open", "%s", what)) {
-                return true
+                return true;
             }
             if (runCommand("gnome-open", "%s", what)) {
-                return true
+                return true;
             }
         }
 
         if (SystemUtils.IS_OS_MAC && runCommand("open", "%s", what)) {
-            return true
+            return true;
         }
 
         if (SystemUtils.IS_OS_WINDOWS && runCommand("explorer", "%s", what)) {
-            return true
+            return true;
         }
 
-        return false
+        return false;
     }
 
-    private fun browseDESKTOP(uri: URI): Boolean {
-        return try {
-            if (!java.awt.Desktop.isDesktopSupported()) {
-                LOG.debug("Platform is not supported.")
-                return false
+    private boolean browseDESKTOP(URI uri) {
+        try {
+            if (!Desktop.isDesktopSupported()) {
+                LOG.debug("Platform is not supported.");
+                return false;
             }
 
-            if (!java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.BROWSE)) {
-                LOG.debug("BROWSE is not supported.")
-                return false
+            if (!Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                LOG.debug("BROWSE is not supported.");
+                return false;
             }
 
-            LOG.info("Trying to use Desktop.getDesktop().browse() with {}", uri.toString())
-            java.awt.Desktop.getDesktop().browse(uri)
-            true
-        } catch (t: Throwable) {
-            LOG.error("Error using desktop browse.", t)
-            false
-        }
-    }
-
-    private fun openDESKTOP(file: File): Boolean {
-        return try {
-            if (!java.awt.Desktop.isDesktopSupported()) {
-                LOG.debug("Platform is not supported.")
-                return false
-            }
-
-            if (!java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.OPEN)) {
-                LOG.debug("OPEN is not supported.")
-                return false
-            }
-
-            LOG.info("Trying to use Desktop.getDesktop().open() with {}", file.toString())
-            java.awt.Desktop.getDesktop().open(file)
-            true
-        } catch (t: Throwable) {
-            LOG.error("Error using desktop open.", t)
-            false
+            LOG.info("Trying to use Desktop.getDesktop().browse() with {}", uri.toString());
+            Desktop.getDesktop().browse(uri);
+            return true;
+        } catch (Throwable t) {
+            LOG.error("Error using desktop browse.", t);
+            return false;
         }
     }
 
-    private fun editDESKTOP(file: File): Boolean {
-        return try {
-            if (!java.awt.Desktop.isDesktopSupported()) {
-                LOG.debug("Platform is not supported.")
-                return false
+    private boolean openDESKTOP(File file) {
+        try {
+            if (!Desktop.isDesktopSupported()) {
+                LOG.debug("Platform is not supported.");
+                return false;
             }
 
-            if (!java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.EDIT)) {
-                LOG.debug("EDIT is not supported.")
-                return false
+            if (!Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                LOG.debug("OPEN is not supported.");
+                return false;
             }
 
-            LOG.info("Trying to use Desktop.getDesktop().edit() with {}", file)
-            java.awt.Desktop.getDesktop().edit(file)
-            true
-        } catch (t: Throwable) {
-            LOG.error("Error using desktop edit.", t)
-            false
+            LOG.info("Trying to use Desktop.getDesktop().open() with {}", file.toString());
+            Desktop.getDesktop().open(file);
+            return true;
+        } catch (Throwable t) {
+            LOG.error("Error using desktop open.", t);
+            return false;
         }
     }
 
-    private fun runCommand(command: String, args: String, file: String): Boolean {
-        LOG.info("Trying to exec:\n   cmd = {}\n   args = {}\n   %s = {}", command, args, file)
+    private boolean editDESKTOP(File file) {
+        try {
+            if (!Desktop.isDesktopSupported()) {
+                LOG.debug("Platform is not supported.");
+                return false;
+            }
 
-        val parts = prepareCommand(command, args, file)
+            if (!Desktop.getDesktop().isSupported(Desktop.Action.EDIT)) {
+                LOG.debug("EDIT is not supported.");
+                return false;
+            }
 
-        return try {
-            val p = Runtime.getRuntime().exec(parts)
+            LOG.info("Trying to use Desktop.getDesktop().edit() with {}", file);
+            Desktop.getDesktop().edit(file);
+            return true;
+        } catch (Throwable t) {
+            LOG.error("Error using desktop edit.", t);
+            return false;
+        }
+    }
+
+    private boolean runCommand(String command, String args, String file) {
+        LOG.info("Trying to exec:\n   cmd = {}\n   args = {}\n   %s = {}", command, args, file);
+
+        String[] parts = prepareCommand(command, args, file);
+
+        try {
+            Process p = Runtime.getRuntime().exec(parts);
             if (p == null) {
-                false
+                return false;
             } else {
                 try {
-                    val retval = p.exitValue()
+                    int retval = p.exitValue();
                     if (retval == 0) {
-                        LOG.error("Process ended immediately.")
-                        false
+                        LOG.error("Process ended immediately.");
+                        return false;
                     } else {
-                        LOG.error("Process crashed.")
-                        false
+                        LOG.error("Process crashed.");
+                        return false;
                     }
-                } catch (itse: IllegalThreadStateException) {
-                    LOG.error("Process is running.")
-                    true
+                } catch (IllegalThreadStateException itse) {
+                    LOG.error("Process is running.");
+                    return true;
                 }
             }
-        } catch (e: IOException) {
-            LOG.error("Error running command.", e)
-            false
+        } catch (IOException e) {
+            LOG.error("Error running command.", e);
+            return false;
         }
     }
 
-    private fun prepareCommand(command: String, args: String?, file: String): Array<String> {
-        val parts = mutableListOf<String>()
-        parts.add(command)
+    private String[] prepareCommand(String command, String args, String file) {
+        java.util.List<String> parts = new java.util.ArrayList<>();
+        parts.add(command);
 
-        args?.split(" ")?.forEach { s ->
-            parts.add(String.format(s, file).trim())
+        if (args != null) {
+            String[] splitArgs = args.split(" ");
+            for (String s : splitArgs) {
+                parts.add(String.format(s, file).trim());
+            }
         }
 
-        return parts.toTypedArray()
+        return parts.toArray(new String[0]);
     }
 
-    private fun isXDG(): Boolean {
-        val xdgSessionId = System.getenv("XDG_SESSION_ID")
-        return !xdgSessionId.isNullOrEmpty()
+    private boolean isXDG() {
+        String xdgSessionId = System.getenv("XDG_SESSION_ID");
+        return xdgSessionId != null && !xdgSessionId.isEmpty();
     }
 
-    private fun isGNOME(): Boolean {
-        val gdmSession = System.getenv("GDMSESSION")
-        return gdmSession?.lowercase()?.contains("gnome") == true
+    private boolean isGNOME() {
+        String gdmSession = System.getenv("GDMSESSION");
+        return gdmSession != null && gdmSession.toLowerCase().contains("gnome");
     }
 
-    private fun isKDE(): Boolean {
-        val gdmSession = System.getenv("GDMSESSION")
-        return gdmSession?.lowercase()?.contains("kde") == true
+    private boolean isKDE() {
+        String gdmSession = System.getenv("GDMSESSION");
+        return gdmSession != null && gdmSession.toLowerCase().contains("kde");
     }
 }

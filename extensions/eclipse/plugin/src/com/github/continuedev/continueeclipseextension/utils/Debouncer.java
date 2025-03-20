@@ -1,21 +1,37 @@
 package com.github.continuedev.continueeclipseextension.utils;
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import java.util.Timer;
+import java.util.TimerTask;
 
-class Debouncer(
-    private val interval: Long,
-    private val coroutineScope: CoroutineScope
-) {
-    private var debounceJob: Job? = null
-    
-    fun debounce(action: suspend () -> Unit) {
-        debounceJob?.cancel()
-        debounceJob = coroutineScope.launch {
-            delay(interval)
-            action()
+public class Debouncer {
+    private final long interval;
+    private final Timer timer;
+    private TimerTask debounceTask;
+
+    public Debouncer(long interval) {
+        this.interval = interval;
+        this.timer = new Timer();
+    }
+
+    public void debounce(Runnable action) {
+        if (debounceTask != null) {
+            debounceTask.cancel();
         }
+
+        debounceTask = new TimerTask() {
+            @Override
+            public void run() {
+                action.run();
+            }
+        };
+
+        timer.schedule(debounceTask, interval);
+    }
+
+    public void stop() {
+        if (debounceTask != null) {
+            debounceTask.cancel();
+        }
+        timer.cancel();
     }
 }

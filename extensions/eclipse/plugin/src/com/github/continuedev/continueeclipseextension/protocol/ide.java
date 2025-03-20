@@ -1,62 +1,280 @@
 package com.github.continuedev.continueeclipseextension.protocol;
 
+import com.github.continuedev.continueeclipseextension.Range;
+import java.util.List;
 
-import com.github.continuedev.continueeclipsejextension.*
+public class GetControlPlaneSessionInfoParams {
+    private final boolean silent;
+    private final boolean useOnboarding;
 
-data class GetControlPlaneSessionInfoParams(val silent: Boolean, val useOnboarding: Boolean)
+    public GetControlPlaneSessionInfoParams(boolean silent, boolean useOnboarding) {
+        this.silent = silent;
+        this.useOnboarding = useOnboarding;
+    }
 
-data class WriteFileParams(
-    val path: String,
-    val contents: String
-)
+    public boolean isSilent() {
+        return silent;
+    }
 
-data class ShowVirtualFileParams(
-    val name: String,
-    val content: String
-)
+    public boolean isUseOnboarding() {
+        return useOnboarding;
+    }
+}
 
+public class WriteFileParams {
+    private final String path;
+    private final String contents;
 
-data class OpenFileParams(val path: String)
+    public WriteFileParams(String path, String contents) {
+        this.path = path;
+        this.contents = contents;
+    }
 
-typealias OpenUrlParam = String
+    public String getPath() {
+        return path;
+    }
 
-typealias getTagsParams = String
+    public String getContents() {
+        return contents;
+    }
+}
 
-data class GetSearchResultsParams(val query: String)
+public class ShowVirtualFileParams {
+    private final String name;
+    private final String content;
 
+    public ShowVirtualFileParams(String name, String content) {
+        this.name = name;
+        this.content = content;
+    }
 
-data class SaveFileParams(val filepath: String)
+    public String getName() {
+        return name;
+    }
 
-data class FileExistsParams(val filepath: String)
+    public String getContent() {
+        return content;
+    }
+}
 
-data class ReadFileParams(val filepath: String)
+public class OpenFileParams {
+    private final String path;
 
-data class ShowDiffParams(
-    val filepath: String,
-    val newContents: String,
-    val stepIndex: Int
-)
+    public OpenFileParams(String path) {
+        this.path = path;
+    }
 
-data class ShowLinesParams(
-    val filepath: String,
-    val startLine: Int,
-    val endLine: Int
-)
+    public String getPath() {
+        return path;
+    }
+}
 
-data class ReadRangeInFileParams(
-    val filepath: String,
-    val range: Range
-)
+public class OpenUrlParam { 
+    private final String url;
 
+    public OpenUrlParam(String url) {
+        this.url = url;
+    }
 
-data class GetDiffParams(val includeUnstaged: Boolean)
+    public String getValue() {
+        return url;
+    }
+}
 
-data class GetBranchParams(val dir: String)
+public class GetTagsParams { 
+    private final String param;
 
-data class GetRepoNameParams(val dir: String)
+    public GetTagsParams(String param) {
+        this.param = param;
+    }
 
-data class GetGitRootPathParams(val dir: String)
+    public String getValue() {
+        return param;
+    }
+}
 
-data class ListDirParams(val dir: String)
+public class GetSearchResultsParams {
+    private final String query;
 
-data class GetFileStatsParams(val files: List<String>)
+    public GetSearchResultsParams(String query) {
+        this.query = query;
+    }
+
+    public String getQuery() {
+        return query;
+    }
+}
+
+public class SaveFileParams {
+    private final String filepath;
+
+    public SaveFileParams(String filepath) {
+        this.filepath = filepath;
+    }
+
+    public String getFilepath() {
+        return filepath;
+    }
+}
+
+public class FileExistsParams {
+    private final String filepath;
+
+    public FileExistsParams(String filepath) {
+        this.filepath = filepath;
+    }
+
+    public String getFilepath() {
+        return filepath;
+    }
+}
+
+public class ReadFileParams {
+    private final String filepath;
+
+    public ReadFileParams(String filepath) {
+        this.filepath = filepath;
+    }
+
+    public String getFilepath() {
+        return filepath;
+    }
+}
+
+public class ShowDiffParams {
+    private final String filepath;
+    private final String newContents;
+    private final int stepIndex;
+
+    public ShowDiffParams(String filepath, String newContents, int stepIndex) {
+        this.filepath = filepath;
+        this.newContents = newContents;
+        this.stepIndex = stepIndex;
+    }
+
+    public String getFilepath() {
+        return filepath;
+    }
+
+    public String getNewContents() {
+        return newContents;
+    }
+
+    public int getStepIndex() {
+        return stepIndex;
+    }
+}
+
+public class ShowLinesParams {
+    private final String filepath;
+    private final int startLine;
+    private final int endLine;
+
+    public ShowLinesParams(String filepath, int startLine, int endLine) {
+        this.filepath = filepath;
+        this.startLine = startLine;
+        this.endLine = endLine;
+    }
+
+    public String getFilepath() {
+        return filepath;
+    }
+
+    public int getStartLine() {
+        return startLine;
+    }
+
+    public int getEndLine() {
+        return endLine;
+    }
+}
+
+public class ReadRangeInFileParams {
+    private final String filepath;
+    private final Range range;
+
+    public ReadRangeInFileParams(String filepath, Range range) {
+        this.filepath = filepath;
+        this.range = range;
+    }
+
+    public String getFilepath() {
+        return filepath;
+    }
+
+    public Range getRange() {
+        return range;
+    }
+}
+
+public class GetDiffParams {
+    private final boolean includeUnstaged;
+
+    public GetDiffParams(boolean includeUnstaged) {
+        this.includeUnstaged = includeUnstaged;
+    }
+
+    public boolean isIncludeUnstaged() {
+        return includeUnstaged;
+    }
+}
+
+public class GetBranchParams {
+    private final String dir;
+
+    public GetBranchParams(String dir) {
+        this.dir = dir;
+    }
+
+    public String getDir() {
+        return dir;
+    }
+}
+
+public class GetRepoNameParams {
+    private final String dir;
+
+    public GetRepoNameParams(String dir) {
+        this.dir = dir;
+    }
+
+    public String getDir() {
+        return dir;
+    }
+}
+
+public class GetGitRootPathParams {
+    private final String dir;
+
+    public GetGitRootPathParams(String dir) {
+        this.dir = dir;
+    }
+
+    public String getDir() {
+        return dir;
+    }
+}
+
+public class ListDirParams {
+    private final String dir;
+
+    public ListDirParams(String dir) {
+        this.dir = dir;
+    }
+
+    public String getDir() {
+        return dir;
+    }
+}
+
+public class GetFileStatsParams {
+    private final List<String> files;
+
+    public GetFileStatsParams(List<String> files) {
+        this.files = files;
+    }
+
+    public List<String> getFiles() {
+        return files;
+    }
+}

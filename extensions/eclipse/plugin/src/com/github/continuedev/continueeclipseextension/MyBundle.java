@@ -1,26 +1,22 @@
 package com.github.continuedev.continueeclipseextension;
 
-import com.intellij.DynamicBundle
-import org.jetbrains.annotations.NonNls
-import org.jetbrains.annotations.PropertyKey
+import org.eclipse.osgi.util.NLS;
 
-@NonNls
-private const val BUNDLE = "messages.MyBundle"
+public class MyBundle extends NLS {
+    private static final String BUNDLE_NAME = "messages.MyBundle"; // messages.properties 파일 이름
+    public static String someMessageKey; // 메시지 키를 정적 필드로 정의 해야 합니다.
 
-object MyBundle : DynamicBundle(BUNDLE) {
+    static {
+        // 클래스 로딩 시점에 초기화
+        NLS.initializeMessages(BUNDLE_NAME, MyBundle.class);
+    }
 
-    @JvmStatic
-    fun message(
-        @PropertyKey(resourceBundle = BUNDLE) key: String,
-        vararg params: Any
-    ) =
-        getMessage(key, *params)
+    private MyBundle() {
+        // 생성자를 private으로 정의하여 인스턴스화 방지
+    }
 
-    @Suppress("unused")
-    @JvmStatic
-    fun messagePointer(
-        @PropertyKey(resourceBundle = BUNDLE) key: String,
-        vararg params: Any
-    ) =
-        getLazyMessage(key, *params)
+    public static String message(String key, Object... params) {
+        // 메시지와 파라미터를 포맷팅합니다.
+        return String.format(NLS.bind(getMessage(key), params));
+    }
 }

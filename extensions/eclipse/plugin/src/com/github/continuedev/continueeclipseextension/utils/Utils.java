@@ -1,83 +1,128 @@
 package com.github.continuedev.continueeclipseextension.utils;
 
-import com.intellij.openapi.vfs.VirtualFile
-import java.net.NetworkInterface
-import java.util.*
-import java.awt.event.KeyEvent.*
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.IWorkbench;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.jface.bindings.keys.KeyStroke;
+import org.eclipse.jface.bindings.keys.SWTKeyLookup;
 
-enum class OS {
-    MAC, WINDOWS, LINUX
-}
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
+import java.util.UUID;
 
-fun getMetaKey(): Int {
-    return when (getOS()) {
-        OS.MAC -> VK_META
-        OS.WINDOWS -> VK_CONTROL
-        OS.LINUX -> VK_CONTROL
+public class Utils {
+
+    public enum OS {
+        MAC, WINDOWS, LINUX
     }
-}
 
-fun getOS(): OS {
-    val osName = System.getProperty("os.name").lowercase()
-    val os = when {
-        osName.contains("mac") || osName.contains("darwin") -> OS.MAC
-        osName.contains("win") -> OS.WINDOWS
-        osName.contains("nix") || osName.contains("nux") || osName.contains("aix") -> OS.LINUX
-        else -> OS.LINUX
-    }
-    return os
-}
-
-fun getMetaKeyLabel(): String {
-    return when (getOS()) {
-        OS.MAC -> "⌘"
-        OS.WINDOWS -> "^"
-        OS.LINUX -> "^"
-    }
-}
-
-fun getAltKeyLabel(): String {
-    return when (getOS()) {
-        OS.MAC -> "⌥"
-        OS.WINDOWS -> "Alt"
-        OS.LINUX -> "Alt"
-    }
-}
-
-fun getShiftKeyLabel(): String {
-    return when (getOS()) {
-        OS.MAC -> "⇧"
-        OS.WINDOWS, OS.LINUX -> "↑"
-    }
-}
-
-fun getMachineUniqueID(): String {
-    val sb = StringBuilder()
-    val networkInterfaces = NetworkInterface.getNetworkInterfaces()
-
-    while (networkInterfaces.hasMoreElements()) {
-        val networkInterface = networkInterfaces.nextElement()
-        val mac = networkInterface.hardwareAddress
-
-        if (mac != null) {
-            for (i in mac.indices) {
-                sb.append(
-                    String.format(
-                        "%02X%s",
-                        mac[i],
-                        if (i < mac.size - 1) "-" else ""
-                    )
-                )
-            }
-            return sb.toString()
+    public static int getMetaKey() {
+        OS os = getOS();
+        switch (os) {
+            case MAC:
+                return KeyStroke.META;
+            case WINDOWS:
+            case LINUX:
+                return KeyStroke.CONTROL;
+            default:
+                return KeyStroke.CONTROL;
         }
     }
 
-    return "No MAC Address Found"
-}
+    public static OS getOS() {
+        String osName = System.getProperty("os.name").toLowerCase();
+        if (osName.contains("mac") || osName.contains("darwin")) {
+            return OS.MAC;
+        } else if (osName.contains("win")) {
+            return OS.WINDOWS;
+        } else if (osName.contains("nix") || osName.contains("nux") || osName.contains("aix")) {
+            return OS.LINUX;
+        } else {
+            return OS.LINUX;
+        }
+    }
 
-fun uuid(): String {
-    return UUID.randomUUID().toString()
-}
+    public static String getMetaKeyLabel() {
+        OS os = getOS();
+        switch (os) {
+            case MAC:
+                return "⌘";
+            case WINDOWS:
+            case LINUX:
+                return "^";
+            default:
+                return "^";
+        }
+    }
 
-fun VirtualFile.toUriOrNull(): String? = fileSystem.getNioPath(this)?.toUri()?.toString()?.removeSuffix("/")
+    public static String getAltKeyLabel() {
+        OS os = getOS();
+        switch (os) {
+            case MAC:
+                return "⌥";
+            case WINDOWS:
+            case LINUX:
+                return "Alt";
+            default:
+                return "Alt";
+        }
+    }
+
+    public static String getShiftKeyLabel() {
+        OS os = getOS();
+        switch (os) {
+            case MAC:
+                return "⇧";
+            case WINDOWS:
+            case LINUX:
+                return "↑";
+            default:
+                return "↑";
+        }
+    }
+
+    public static String getMachineUniqueID() {
+        StringBuilder sb = new StringBuilder();
+        Enumeration<NetworkInterface> networkInterfaces;
+        try {
+            networkInterfaces = NetworkInterface.getNetworkInterfaces();
+        } catch (SocketException e) {
+            e.printStackTrace();
+            return "No MAC Address Found";
+        }
+
+        while (networkInterfaces.hasMoreElements()) {
+            NetworkInterface networkInterface = networkInterfaces.nextElement();
+            byte[] mac;
+            try {
+                mac = networkInterface.getHardwareAddress();
+            } catch (SocketException e) {
+                e.printStackTrace();
+                continue;
+            }
+
+            if (mac != null) {
+                for (int i = 0; i < mac.length; i++) {
+                    sb.append(String.format("%02X%s", mac[i], (i < mac.length - 1) ? "-" : ""));
+                }
+                return sb.toString();
+            }
+        }
+        return "No MAC Address Found";
+    }
+
+    public static String uuid() {
+        return UUID.randomUUID().toString();
+    }
+
+    public static String toUriOrNull(IFile virtualFile) {
+        if (virtualFile == null) {
+            return null;
+        }
+        return ResourcesPlugin.getWorkspace().getRoot().getFile(new Path(virtualFile.getLocationURI().getPath())).getRawLocationURI().toString().replaceAll("/$", "");
+    }
+}

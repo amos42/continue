@@ -1,101 +1,106 @@
 package com.github.continuedev.continueeclipseextension;
 
-import com.intellij.openapi.editor.colors.EditorColors
-import com.intellij.openapi.editor.colors.EditorColorsManager
-import java.awt.Color
-import kotlin.math.max
-import kotlin.math.min
-import com.intellij.ui.JBColor
-import com.intellij.ui.ColorUtil
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.themes.ITheme;
+import org.eclipse.swt.graphics.Color;
+import org.eclipse.swt.graphics.RGB;
+import org.eclipse.swt.widgets.Display;
 
-class GetTheme {
-    fun getSecondaryDark(): Color {
-        val globalScheme = EditorColorsManager.getInstance().globalScheme
-        val defaultBackground = globalScheme.defaultBackground
-        val grayscale =
-            (defaultBackground.red * 0.3 + defaultBackground.green * 0.59 + defaultBackground.blue * 0.11).toInt()
+public class GetTheme {
+    private static final int TINT = 20;
 
-        val adjustedRed: Int
-        val adjustedGreen: Int
-        val adjustedBlue: Int
+    public RGB getSecondaryDark() {
+        ITheme theme = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme();
+        RGB defaultBackground = theme.getColorRegistry().getRGBValue("org.eclipse.ui.workbench.background");
 
-        val tint: Int = 20
+        int grayscale = (int) (defaultBackground.red * 0.3 + defaultBackground.green * 0.59 + defaultBackground.blue * 0.11);
+
+        int adjustedRed;
+        int adjustedGreen;
+        int adjustedBlue;
+
         if (grayscale > 128) { // if closer to white
-            adjustedRed = max(0, defaultBackground.red - tint)
-            adjustedGreen = max(0, defaultBackground.green - tint)
-            adjustedBlue = max(0, defaultBackground.blue - tint)
+            adjustedRed = Math.max(0, defaultBackground.red - TINT);
+            adjustedGreen = Math.max(0, defaultBackground.green - TINT);
+            adjustedBlue = Math.max(0, defaultBackground.blue - TINT);
         } else { // if closer to black
-            adjustedRed = min(255, defaultBackground.red + tint)
-            adjustedGreen = min(255, defaultBackground.green + tint)
-            adjustedBlue = min(255, defaultBackground.blue + tint)
+            adjustedRed = Math.min(255, defaultBackground.red + TINT);
+            adjustedGreen = Math.min(255, defaultBackground.green + TINT);
+            adjustedBlue = Math.min(255, defaultBackground.blue + TINT);
         }
 
-        return Color(adjustedRed, adjustedGreen, adjustedBlue)
+        return new RGB(adjustedRed, adjustedGreen, adjustedBlue);
     }
 
-    fun getHighlight(): Color {
-        val globalScheme = EditorColorsManager.getInstance().globalScheme
-        return globalScheme.getColor(EditorColors.MODIFIED_TAB_ICON_COLOR) ?: globalScheme.defaultForeground
+    public RGB getHighlight() {
+        ITheme theme = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme();
+        RGB modifiedColor = theme.getColorRegistry().getRGBValue("org.eclipse.jdt.ui.error.foreground");
+        RGB defaultForeground = theme.getColorRegistry().getRGBValue("org.eclipse.ui.workbench.foreground");
+
+        return modifiedColor != null ? modifiedColor : defaultForeground;
     }
 
-    fun getTheme(): Map<String, String> {
-        fun toHex(color: Color): String {
-            return String.format("#%02x%02x%02x", color.red, color.green, color.blue)
-        }
-        try {
-            val background = JBColor.background()
-            val foreground = JBColor.foreground()
+    public java.util.Map<String, String> getTheme() {
+        Display display = Display.getDefault();
 
-            val buttonBackground = JBColor.namedColor("Button.background", Color(230, 230, 230))
-            val buttonForeground = JBColor.namedColor("Button.foreground", Color(0, 0, 0))
+        ITheme theme = PlatformUI.getWorkbench().getThemeManager().getCurrentTheme();
+        Color background = display.getSystemColor(org.eclipse.swt.SWT.COLOR_WIDGET_BACKGROUND);
+        Color foreground = display.getSystemColor(org.eclipse.swt.SWT.COLOR_WIDGET_FOREGROUND);
 
-            val badgeBackground = JBColor.namedColor("Badge.background", Color(150, 150, 150))
-            val badgeForeground = JBColor.namedColor("Badge.foreground", Color(0, 0, 0))
+        Color buttonBackground = display.getSystemColor(org.eclipse.swt.SWT.COLOR_LIST_BACKGROUND);
+        Color buttonForeground = display.getSystemColor(org.eclipse.swt.SWT.COLOR_LIST_FOREGROUND);
 
-            val inputBackground = JBColor.namedColor("TextField.background", Color(255, 255, 255))
+        Color badgeBackground = display.getSystemColor(org.eclipse.swt.SWT.COLOR_LIST_BACKGROUND);
+        Color badgeForeground = display.getSystemColor(org.eclipse.swt.SWT.COLOR_LIST_FOREGROUND);
 
-            val border = JBColor.border()
-            val focusBorder = JBColor.namedColor("Focus.borderColor", Color(100, 100, 255))
-            val editorScheme = EditorColorsManager.getInstance().globalScheme
+        Color inputBackground = display.getSystemColor(org.eclipse.swt.SWT.COLOR_LIST_BACKGROUND);
 
-            val editorBackground = editorScheme.defaultBackground
-            val editorForeground = editorScheme.defaultForeground
+        Color border = display.getSystemColor(org.eclipse.swt.SWT.COLOR_WIDGET_NORMAL_SHADOW);
+        Color focusBorder = new Color(display, new RGB(100, 100, 255));
 
-            val actionHoverBackground = JBColor.namedColor("ActionButton.hoverBackground", Color(220, 220, 220))
+        RGB editorBackground = theme.getColorRegistry().getRGBValue("org.eclipse.ui.workbench.background");
+        RGB editorForeground = theme.getColorRegistry().getRGBValue("org.eclipse.ui.workbench.foreground");
 
-            val findMatchBackground = editorScheme.getAttributes(EditorColors.SEARCH_RESULT_ATTRIBUTES)?.backgroundColor ?: Color(255, 221, 0)
+        RGB actionHoverBackground = theme.getColorRegistry().getRGBValue("org.eclipse.ui.workbench.hover.background");
 
-            val theme = mapOf(
-                "--vscode-editor-foreground" to toHex(editorForeground),
-                "--vscode-editor-background" to toHex(editorBackground),
-
-                "--vscode-button-background" to toHex(buttonBackground),
-                "--vscode-button-foreground" to toHex(buttonForeground),
-
-                "--vscode-list-activeSelectionBackground" to toHex(actionHoverBackground) + "50",
-
-                "--vscode-quickInputList-focusForeground" to toHex(foreground),
-                "--vscode-quickInput-background" to toHex(inputBackground),
-
-                "--vscode-badge-background" to toHex(badgeBackground),
-                "--vscode-badge-foreground" to toHex(badgeForeground),
-
-                "--vscode-input-background" to toHex(inputBackground),
-                "--vscode-input-border" to toHex(border),
-                "--vscode-sideBar-background" to toHex(background),
-                "--vscode-sideBar-border" to toHex(border),
-                "--vscode-focusBorder" to toHex(focusBorder),
-
-                "--vscode-commandCenter-activeBorder" to toHex(focusBorder),
-                "--vscode-commandCenter-inactiveBorder" to toHex(border),
-
-                "--vscode-editor-findMatchHighlightBackground" to toHex(findMatchBackground) + "40"
-            )
-
-            return theme
-        } catch (error: Error) {
-            return mapOf()
+        RGB findMatchBackground = theme.getColorRegistry().getRGBValue("org.eclipse.search.lowlightmatch.background");
+        if (findMatchBackground == null) {
+            findMatchBackground = new RGB(255, 221, 0);
         }
 
+        java.util.Map<String, String> themeMap = new java.util.HashMap<>();
+
+        themeMap.put("--vscode-editor-foreground", toHex(editorForeground));
+        themeMap.put("--vscode-editor-background", toHex(editorBackground));
+
+        themeMap.put("--vscode-button-background", toHex(buttonBackground.getRGB()));
+        themeMap.put("--vscode-button-foreground", toHex(buttonForeground.getRGB()));
+
+        themeMap.put("--vscode-list-activeSelectionBackground", toHex(actionHoverBackground) + "50");
+
+        themeMap.put("--vscode-quickInputList-focusForeground", toHex(foreground.getRGB()));
+        themeMap.put("--vscode-quickInput-background", toHex(inputBackground.getRGB()));
+
+        themeMap.put("--vscode-badge-background", toHex(badgeBackground.getRGB()));
+        themeMap.put("--vscode-badge-foreground", toHex(badgeForeground.getRGB()));
+
+        themeMap.put("--vscode-input-background", toHex(inputBackground.getRGB()));
+        themeMap.put("--vscode-input-border", toHex(border.getRGB()));
+        themeMap.put("--vscode-sideBar-background", toHex(background.getRGB()));
+        themeMap.put("--vscode-sideBar-border", toHex(border.getRGB()));
+        themeMap.put("--vscode-focusBorder", toHex(focusBorder.getRGB()));
+
+        themeMap.put("--vscode-commandCenter-activeBorder", toHex(focusBorder.getRGB()));
+        themeMap.put("--vscode-commandCenter-inactiveBorder", toHex(border.getRGB()));
+
+        themeMap.put("--vscode-editor-findMatchHighlightBackground", toHex(findMatchBackground) + "40");
+
+        focusBorder.dispose(); // 사용한 자원 해제
+
+        return themeMap;
+    }
+
+    private String toHex(RGB color) {
+        return String.format("#%02x%02x%02x", color.red, color.green, color.blue);
     }
 }

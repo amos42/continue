@@ -1,5 +1,6 @@
 package com.github.continuedev.continueeclipseextension.constants;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -67,69 +68,102 @@ exports.modifyConfig = modifyConfig;
 
     public static String getContinueGlobalPath() {
         String continuePath = Paths.get(System.getProperty("user.home"), ".continue").toString();
-        if (!Files.exists(continuePath)) {
-            Files.createDirectories(continuePath);
+        if (!Files.exists(Path.of(continuePath))) {
+            try {
+				Files.createDirectories(Path.of(continuePath));
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
         }
         return continuePath;
     }
 
     public static String getContinueRemoteConfigPath(String remoteHostname) {
         String path = Paths.get(getContinueGlobalPath(), ".configs", remoteHostname).toString();
-        if (!Files.exists(path)) {
-            Files.createDirectories(path);
+        if (!Files.exists(Path.of(path))) {
+            try {
+				Files.createDirectories(Path.of(path));
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
         }
         return path;
     }
 
     public static String getConfigJsonPath(String remoteHostname) {
-        String path = Paths.get(
-                if (remoteHostname != null) getContinueRemoteConfigPath(remoteHostname)
-                else getContinueGlobalPath(),
+        Path path = Paths.get(
+                (remoteHostname != null) ? getContinueRemoteConfigPath(remoteHostname) : getContinueGlobalPath(),
                 "config.json"
-        ).toString();
+        );
         if (!Files.exists(path)) {
-            Files.createFile(path);
-            Files.writeString(path, DEFAULT_CONFIG);
+            try {
+				Files.createFile(path);
+	            Files.writeString(path, DEFAULT_CONFIG);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
         }
-        return path;
+        return path.toString();
     }
 
     public static String getConfigJsPath(String remoteHostname) {
-        String path = Paths.get(
-                if (remoteHostname != null) getContinueRemoteConfigPath(remoteHostname)
-                else getContinueGlobalPath(),
+        Path path = Paths.get(
+                (remoteHostname != null) ? getContinueRemoteConfigPath(remoteHostname) : getContinueGlobalPath(),
                 "config.js"
-        ).toString();
+        );
         if (!Files.exists(path)) {
-            Files.createFile(path);
-            Files.writeString(path, DEFAULT_CONFIG_JS);
+            try {
+				Files.createFile(path);
+	            Files.writeString(path, DEFAULT_CONFIG_JS);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
         }
-        return path;
+        return path.toString();
     }
 
     public static String getSessionsDir() {
-        String path = Paths.get(getContinueGlobalPath(), "sessions").toString();
+        Path path = Paths.get(getContinueGlobalPath(), "sessions");
         if (!Files.exists(path)) {
-            Files.createDirectories(path);
+            try {
+				Files.createDirectories(path);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
         }
-        return path;
+        return path.toString();
     }
 
     public static String getSessionsListPath() {
-        String path = Paths.get(getSessionsDir(), "sessions.json").toString();
+    	Path path = Paths.get(getSessionsDir(), "sessions.json");
         if (!Files.exists(path)) {
-            Files.createFile(path);
-            Files.writeString(path, "[]");
+            try {
+				Files.createFile(path);
+	            Files.writeString(path, "[]");
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
         }
-        return path;
+        return path.toString();
     }
 
     public static String getSessionFilePath(String sessionId) {
-        String path = Paths.get(getSessionsDir(), "$sessionId.json").toString();
+    	Path path = Paths.get(getSessionsDir(), "$sessionId.json");
         if (!Files.exists(path)) {
-            Files.createFile(path);
-            Files.writeString(path, "{}");
+            try {
+				Files.createFile(path);
+	            Files.writeString(path, "{}");
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
         }
-        return path;
+        return path.toString();
     }
 }

@@ -1,194 +1,216 @@
 package com.github.continuedev.continueeclipseextension;
 
 import com.github.continuedev.continueeclipsejextension.services.ContinuePluginService;
-import com.github.continuedev.continueeclipsejextension.utils.getAltKeyLabel;
-import com.intellij.diff.DiffContentFactory;
-import com.intellij.diff.DiffManager;
-import com.intellij.diff.DiffRequestPanel;
-import com.intellij.diff.contents.DiffContent;
-import com.intellij.diff.requests.SimpleDiffRequest;
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.command.WriteCommandAction;
-import com.intellij.openapi.components.ServiceManager;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.project.DumbAware;
-import com.intellij.openapi.project.Project;
-import com.intellij.openapi.ui.DialogWrapper;
-import com.intellij.openapi.util.Disposer;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import java.awt.Toolkit;
+import org.eclipse.jface.dialogs.Dialog;
+import org.eclipse.jface.dialogs.IDialogConstants;
+import org.eclipse.swt.SWT;
+import org.eclipse.swt.graphics.Rectangle;
+import org.eclipse.swt.layout.FillLayout;
+import org.eclipse.swt.widgets.*;
+import org.eclipse.ui.PlatformUI;
+
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import javax.swing.Action;
-import javax.swing.JComponent;
+import java.util.HashMap;
+import java.util.Map;
 
+public class Diffs {
+    private final Map<String, DiffInfo> diffInfoMap;
+    private String lastFile2;
+    private final Shell shell;
 
-fun getDiffDirectory(): File {
-    val homeDirectory = System.getProperty("user.home")
-    val diffDirPath = Paths.get(homeDirectory).resolve(".continue").resolve(".diffs").toString()
-    val diffDir = File(diffDirPath)
-    if (!diffDir.exists()) {
-        diffDir.mkdirs()
-        diffDir.setWritable(true)
+    public Diffs() {
+        this.diffInfoMap = new HashMap<>();
+        this.shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
     }
-    return diffDir
-}
 
-fun escapeFilepath(filepath: String): String {
-    return filepath.replace("/", "_f_").replace("\\", "_b_").replace(":", "_c_")
-}
-
-interface DiffInfo {
-    val originalFilepath: String
-    val newFilepath: String
-    var diffRequestPanel: DiffRequestPanel?
-    val stepIndex: Int
-    var dialog: DialogWrapper?
-}
-
-class DiffManager(private val project: Project) : DumbAware {
-
-    // Mapping from file2 to relevant info
-    private val diffInfoMap: MutableMap<String, DiffInfo> = mutableMapOf()
-    private var lastFile2: String? = null
-
-    fun showDiff(filepath: String, replacement: String, stepIndex: Int) {
-        val diffDir = getDiffDirectory()
-        val escapedPath = escapeFilepath(filepath)
-        val file = diffDir.resolve(escapedPath)
-
-        if (!file.exists()) {
-            file.createNewFile()
+    public File getDiffDirectory() {
+        String homeDirectory = System.getProperty("user.home");
+        Path diffDirPath = Paths.get(homeDirectory).resolve(".continue").resolve(".diffs");
+        File diffDir = diffDirPath.toFile();
+        if (!diffDir.exists()) {
+            diffDir.mkdirs();
+            diffDir.setWritable(true);
         }
-        file.writeText(replacement)
-        openDiffWindow(URI(filepath).toString(), file.toURI().toString(), stepIndex)
+        return diffDir;
     }
 
-    private fun cleanUpFile(file2: String) {
-        diffInfoMap[file2]?.dialog?.close(0)
-        diffInfoMap.remove(file2)
-        File(file2).delete()
-        if (lastFile2 == file2) {
-            lastFile2 = null
-        }
+    public String escapeFilepath(String filepath) {
+        return filepath.replace("/", "_f_").replace("\\", "_b_").replace(":", "_c_");
     }
 
-
-    fun acceptDiff(file2: String?) {
-        val file = (file2 ?: lastFile2) ?: return
-        val diffInfo = diffInfoMap[file] ?: return
-
-        // Write contents to original file
-        val virtualFile = LocalFileSystem.getInstance().findFileByPath(URI(diffInfo.originalFilepath).path) ?: return
-        val document = FileDocumentManager.getInstance().getDocument(virtualFile) ?: return
-        WriteCommandAction.runWriteCommandAction(project) {
-            document.setText(File(file).readText())
-        }
-        FileDocumentManager.getInstance().saveDocument(document)
-
-        // Notify server of acceptance
-        val continuePluginService = ServiceManager.getService(
-            project,
-            ContinuePluginService::class.java
-        )
-        continuePluginService.ideProtocolClient?.sendAcceptRejectDiff(true, diffInfo.stepIndex)
-
-        // Clean up state
-        cleanUpFile(file)
-    }
-
-    fun rejectDiff(file2: String?) {
-        val file = (file2 ?: lastFile2) ?: return
-        val diffInfo = diffInfoMap[file] ?: return
-        val continuePluginService = ServiceManager.getService(
-            project,
-            ContinuePluginService::class.java
-        )
-        continuePluginService.ideProtocolClient?.deleteAtIndex(diffInfo.stepIndex)
-        continuePluginService.ideProtocolClient?.sendAcceptRejectDiff(false, diffInfo.stepIndex)
-
-        cleanUpFile(file)
-    }
-
-    private fun openDiffWindow(
-        file1: String,
-        file2: String,
-        stepIndex: Int
-    ) {
-        lastFile2 = file2
-
-        // Create a DiffContent for each of the texts you want to compare
-        val content1: DiffContent = DiffContentFactory.getInstance().create(File(URI(file1)).readText())
-        val content2: DiffContent = DiffContentFactory.getInstance().create(File(URI(file2)).readText())
-
-        // Create a SimpleDiffRequest and populate it with the DiffContents and titles
-        val diffRequest = SimpleDiffRequest("Continue Diff", content1, content2, "Old", "New")
-
-        // Get a DiffRequestPanel from the DiffManager and set the DiffRequest to it
-        val diffInfo = diffInfoMap[file2]
-
-        var shouldShowDialog = false
-        if (diffInfo == null) {
-            diffInfoMap[file2] = object : DiffInfo {
-                override var dialog: DialogWrapper? = null
-                override var diffRequestPanel: DiffRequestPanel? = null
-                override val stepIndex: Int = stepIndex
-                override val newFilepath: String = file2
-                override val originalFilepath: String = file1
+    public void showDiff(String filepath, String replacement, int stepIndex) {
+        File diffDir = getDiffDirectory();
+        String escapedPath = escapeFilepath(filepath);
+        File file = new File(diffDir, escapedPath);
+        try {
+            if (!file.exists()) {
+                file.createNewFile();
             }
-            shouldShowDialog = true
+            Files.write(file.toPath(), replacement.getBytes());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        openDiffWindow(filepath, file.getAbsolutePath(), stepIndex);
+    }
+
+    private void cleanUpFile(String file2) {
+        DiffInfo diffInfo = diffInfoMap.get(file2);
+        if (diffInfo != null && diffInfo.dialog != null) {
+            diffInfo.dialog.close();
+        }
+        diffInfoMap.remove(file2);
+        new File(file2).delete();
+        if (lastFile2 != null && lastFile2.equals(file2)) {
+            lastFile2 = null;
+        }
+    }
+
+    public void acceptDiff(String file2) {
+        String file = file2 != null ? file2 : lastFile2;
+        if (file == null) return;
+        DiffInfo diffInfo = diffInfoMap.get(file);
+        if (diffInfo == null) return;
+
+        try {
+            ContinuePluginService continuePluginService = (ContinuePluginService) PlatformUI.getWorkbench()
+                    .getService(ContinuePluginService.class);
+            if (continuePluginService != null && continuePluginService.getIdeProtocolClient() != null) {
+                continuePluginService.getIdeProtocolClient().sendAcceptRejectDiff(true, diffInfo.stepIndex);
+            }
+            Files.write(new File(diffInfo.originalFilepath).toPath(), Files.readAllBytes(new File(file).toPath()));
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
-        ApplicationManager.getApplication().invokeLater {
-            val diffPanel: DiffRequestPanel = diffInfo?.diffRequestPanel ?: DiffManager.getInstance()
-                .createRequestPanel(project, Disposer.newDisposable(), null)
-            diffPanel.setRequest(diffRequest)
+        cleanUpFile(file);
+    }
 
-            diffPanel.component.revalidate()
-            diffPanel.component.repaint()
+    public void rejectDiff(String file2) {
+        String file = file2 != null ? file2 : lastFile2;
+        if (file == null) return;
+        DiffInfo diffInfo = diffInfoMap.get(file);
+        if (diffInfo == null) return;
+
+        ContinuePluginService continuePluginService = (ContinuePluginService) PlatformUI.getWorkbench()
+                .getService(ContinuePluginService.class);
+        if (continuePluginService != null && continuePluginService.getIdeProtocolClient() != null) {
+            continuePluginService.getIdeProtocolClient().deleteAtIndex(diffInfo.stepIndex);
+            continuePluginService.getIdeProtocolClient().sendAcceptRejectDiff(false, diffInfo.stepIndex);
+        }
+
+        cleanUpFile(file);
+    }
+
+    private void openDiffWindow(String file1, String file2, int stepIndex) {
+        lastFile2 = file2;
+
+        try {
+            String content1 = new String(Files.readAllBytes(new File(URI(file1)).toPath()));
+            String content2 = new String(Files.readAllBytes(new File(URI(file2)).toPath()));
+
+            DiffInfo diffInfo = diffInfoMap.get(file2);
+            boolean shouldShowDialog = diffInfo == null;
+            if (shouldShowDialog) {
+                diffInfo = new DiffInfo();
+                diffInfo.originalFilepath = file1;
+                diffInfo.newFilepath = file2;
+                diffInfo.stepIndex = stepIndex;
+                diffInfoMap.put(file2, diffInfo);
+            }
+
+            Shell dialogShell = new Shell(shell, SWT.DIALOG_TRIM | SWT.APPLICATION_MODAL);
+            dialogShell.setLayout(new FillLayout());
+            dialogShell.setText("Continue Diff");
+
+            Text text1 = new Text(dialogShell, SWT.V_SCROLL | SWT.BORDER | SWT.READ_ONLY);
+            text1.setText(content1);
+
+            Text text2 = new Text(dialogShell, SWT.V_SCROLL | SWT.BORDER | SWT.READ_ONLY);
+            text2.setText(content2);
+
+            Button acceptButton = new Button(dialogShell, SWT.PUSH);
+            acceptButton.setText("Accept (ALT + SHIFT + Y)");
+            acceptButton.addSelectionListener(new SelectionAdapter() {
+                @Override
+                public void widgetSelected(SelectionEvent e) {
+                    acceptDiff(file2);
+                    dialogShell.close();
+                }
+            });
+
+            Button rejectButton = new Button(dialogShell, SWT.PUSH);
+            rejectButton.setText("Reject (ALT + SHIFT + N)");
+            rejectButton.addSelectionListener(new SelectionAdapter() {
+                @Override
+                public void widgetSelected(SelectionEvent e) {
+                    rejectDiff(file2);
+                    dialogShell.close();
+                }
+            });
+
+            text1.setSize(400, 300);
+            text2.setSize(400, 300);
+
+            Rectangle screenSize = shell.getDisplay().getPrimaryMonitor().getBounds();
+            dialogShell.setSize(screenSize.width / 2, screenSize.height / 2);
+            dialogShell.setLocation((screenSize.width - dialogShell.getSize().x) / 2,
+                    (screenSize.height - dialogShell.getSize().y) / 2);
 
             if (shouldShowDialog) {
-                // Create a dialog and add the DiffRequestPanel to it
-                val dialog: DialogWrapper = diffInfo?.dialog
-                    ?: object : DialogWrapper(project, true, IdeModalityType.MODELESS) {
-                        init {
-                            init()
-                            title = "Continue Diff"
-                        }
+                diffInfo.dialog = new Dialog(dialogShell) {
+                    @Override
+                    protected Control createDialogArea(Composite parent) {
+                        Composite container = (Composite) super.createDialogArea(parent);
+                        container.setLayout(new FillLayout());
 
-                        override fun createCenterPanel(): JComponent? {
-                            return diffPanel.component
-                        }
+                        text1.moveAbove(text2);
 
-                        override fun doOKAction() {
-                            super.doOKAction()
-                            acceptDiff(file2)
-                        }
-
-                        override fun doCancelAction() {
-                            super.doCancelAction()
-                            rejectDiff(file2)
-                        }
-
-                        override fun createActions(): Array<Action> {
-                            val okAction = okAction
-                            okAction.putValue(Action.NAME, "Accept (${getAltKeyLabel()} ⇧ Y)")
-
-                            val cancelAction = cancelAction
-                            cancelAction.putValue(Action.NAME, "Reject (${getAltKeyLabel()} ⇧ N)")
-
-                            return arrayOf(okAction, cancelAction)
-                        }
+                        return container;
                     }
 
-                dialog.rootPane.isDoubleBuffered = true
-                val screenSize = Toolkit.getDefaultToolkit().screenSize
-                dialog.setSize(screenSize.width, screenSize.height)
-                dialog.show()
-                diffInfoMap[file2]?.dialog = dialog
-                diffInfoMap[file2]?.diffRequestPanel = diffPanel
+                    @Override
+                    protected void createButtonsForButtonBar(Composite parent) {
+                        Button okButton = createButton(parent, IDialogConstants.OK_ID, "Accept", true);
+                        okButton.addSelectionListener(new SelectionAdapter() {
+                            @Override
+                            public void widgetSelected(SelectionEvent e) {
+                                acceptDiff(file2);
+                                close();
+                            }
+                        });
+
+                        Button cancelButton = createButton(parent, IDialogConstants.CANCEL_ID, "Reject", false);
+                        cancelButton.addSelectionListener(new SelectionAdapter() {
+                            @Override
+                            public void widgetSelected(SelectionEvent e) {
+                                rejectDiff(file2);
+                                close();
+                            }
+                        });
+                    }
+                };
             }
+
+            dialogShell.open();
+            while (!dialogShell.isDisposed()) {
+                if (!dialogShell.getDisplay().readAndDispatch()) {
+                    dialogShell.getDisplay().sleep();
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
+    }
+
+    private static class DiffInfo {
+        String originalFilepath;
+        String newFilepath;
+        Dialog dialog;
+        int stepIndex;
     }
 }

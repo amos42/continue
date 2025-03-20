@@ -1,49 +1,72 @@
 package com.github.continuedev.continueeclipseextension;
 
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.Path;
+import org.eclipse.jface.text.source.ISchemaProvider;
+import org.eclipse.jface.text.source.IURLInputStreamProvider;
+import org.eclipse.wst.json.core.schema.ISchemaFileProvider;
+import org.eclipse.wst.json.core.schema.ISchemaProviderFactory;
+import org.eclipse.wst.json.core.schema.SchemaType;
 import com.github.continuedev.continueeclipsejextension.activities.ContinuePluginStartupActivity;
-import com.github.continuedev.continueeclipsejextension.constants.getContinueGlobalPath;
-import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.io.StreamUtil;
-import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.openapi.vfs.VirtualFile;
-import com.jetbrains.jsonSchema.extension.JsonSchemaFileProvider;
-import com.jetbrains.jsonSchema.extension.JsonSchemaProviderFactory;
-import com.jetbrains.jsonSchema.extension.SchemaType;
+import com.github.continuedev.continueeclipsejextension.constants.ContinueConstants;
+
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 
-class ConfigRcJsonSchemaProviderFactory : JsonSchemaProviderFactory {
-    override fun getProviders(project: Project): MutableList<JsonSchemaFileProvider> {
-        return mutableListOf(ConfigRcJsonSchemaFileProvider())
+public class ConfigRcJsonSchemaProviderFactory implements ISchemaProviderFactory {
+
+    @Override
+    public ISchemaProvider createSchemaProvider() {
+        return new ConfigRcJsonSchemaFileProvider();
     }
 }
 
-class ConfigRcJsonSchemaFileProvider : JsonSchemaFileProvider {
-    override fun isAvailable(file: VirtualFile): Boolean {
-        return file.name == ".continuerc.json"
+class ConfigRcJsonSchemaFileProvider implements ISchemaFileProvider, IURLInputStreamProvider {
+
+    @Override
+    public boolean isApplicable(String fileName) {
+        return fileName.equals(".continuerc.json");
     }
 
-    override fun getName(): String {
-        return ".continuerc.json"
+    @Override
+    public String getDisplayName() {
+        return ".continuerc.json";
     }
 
-    override fun getSchemaFile(): VirtualFile? {
-        ContinuePluginStartupActivity::class.java.getClassLoader().getResourceAsStream("continue_rc_schema.json")
-            .use { `is` ->
-                if (`is` == null) {
-                    throw IOException("Resource not found: continue_rc_schema.json")
-                }
-                val content = StreamUtil.readText(`is`, StandardCharsets.UTF_8)
-                val filepath = Paths.get(getContinueGlobalPath(), "continue_rc_schema.json").toString()
-                File(filepath).writeText(content)
-                return LocalFileSystem.getInstance().findFileByPath(filepath)
-            }
+    @Override
+    public String getSchemaURI() {
+        return getSchemaFile().getFullPath().toString();
     }
 
-    override fun getSchemaType(): SchemaType {
-        return SchemaType.embeddedSchema
+    @Override
+    public InputStream getInputStream() throws IOException {
+        InputStream inputStream = ContinuePluginStartupActivity.class.getClassLoader().getResourceAsStream("continue_rc_schema.json");
+        if (inputStream == null) {
+            throw new IOException("Resource not found: continue_rc_schema.json");
+        }
+        String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+        String filePath = Paths.get(ContinueConstants.getContinueGlobalPath(), "continue_rc_schema.json").toString();
+        File file = new File(filePath);
+        try (FileOutputStream fos = new FileOutputStream(file)) {
+            fos.write(content.getBytes(StandardCharsets.UTF_8));
+        }
+        return file.toURI().toURL().openStream();
     }
 
+    @Override
+    public SchemaType getSchemaType() {
+        return SchemaType.embedded;
+    }
+
+    @Override
+    public IFile getSchemaFile() {
+        String filePath = Paths.get(ContinueConstants.getContinueGlobalPath(), "continue_rc_schema.json").toString();
+        File file = new File(filePath);
+        return ResourcesPlugin.getWorkspace().getRoot().getFile(new Path(file.getAbsolutePath()));
+    }
 }

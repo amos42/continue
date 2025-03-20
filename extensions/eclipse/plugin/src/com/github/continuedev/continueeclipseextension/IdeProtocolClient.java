@@ -1,597 +1,511 @@
 package com.github.continuedev.continueeclipseextension;
 
-import IntelliJIDE
-import com.github.continuedev.continueeclipsejextension.*
-import com.github.continuedev.continueeclipsejextension.activities.ContinuePluginDisposable
-import com.github.continuedev.continueeclipsejextension.activities.showTutorial
-import com.github.continuedev.continueeclipsejextension.auth.AuthListener
-import com.github.continuedev.continueeclipsejextension.auth.ContinueAuthService
-import com.github.continuedev.continueeclipsejextension.editor.DiffStreamHandler
-import com.github.continuedev.continueeclipsejextension.editor.DiffStreamService
-import com.github.continuedev.continueeclipsejextension.protocol.*
-import com.github.continuedev.continueeclipsejextension.services.*
-import com.github.continuedev.continueeclipsejextension.utils.*
-import com.google.gson.Gson
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.command.WriteCommandAction
-import com.intellij.openapi.components.ServiceManager
-import com.intellij.openapi.components.service
-import com.intellij.openapi.editor.SelectionModel
-import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.project.DumbAware
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.TextRange
-import com.intellij.openapi.vfs.VirtualFileManager
-import kotlinx.coroutines.*
-import java.awt.Toolkit
-import java.awt.datatransfer.StringSelection
-import java.lang.IllegalStateException
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import com.github.continuedev.continueeclipseextension.*;
+import com.github.continuedev.continueeclipseextension.auth.AuthListener;
+import com.github.continuedev.continueeclipseextension.auth.ContinueAuthService;
+import com.github.continuedev.continueeclipseextension.editor.DiffStreamHandler;
+import com.github.continuedev.continueeclipseextension.editor.DiffStreamService;
+import com.github.continuedev.continueeclipseextension.protocol.*;
+import com.github.continuedev.continueeclipseextension.services.*;
+import com.github.continuedev.continueeclipseextension.utils.*;
+import com.google.gson.Gson;
+import org.eclipse.core.resources.IFile;
+import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IProgressMonitor;
+import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.jface.text.IDocument;
+import org.eclipse.jface.text.ITextSelection;
+import org.eclipse.jface.text.TextSelection;
+import org.eclipse.swt.dnd.Clipboard;
+import org.eclipse.swt.dnd.TextTransfer;
+import org.eclipse.swt.widgets.Display;
+import org.eclipse.ui.IWorkbench;
+import org.eclipse.ui.IWorkbenchPage;
+import org.eclipse.ui.PartInitException;
+import org.eclipse.ui.PlatformUI;
+import org.eclipse.ui.ide.IDE;
+import org.eclipse.ui.texteditor.ITextEditor;
 
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
-class IdeProtocolClient(
-    private val continuePluginService: ContinuePluginService,
-    private val coroutineScope: CoroutineScope,
-    private val project: Project
-) : DumbAware {
-    private val ide: IDE = IntelliJIDE(project, continuePluginService)
+public class IdeProtocolClient implements DumbAware {
+    private final ContinuePluginService continuePluginService;
+    private final ServiceScope coroutineScope;
+    private final Project project;
 
-    init {
-        // Setup config.json / config.ts save listeners
+    private final IDE ide;
+
+    public IdeProtocolClient(ContinuePluginService continuePluginService, ServiceScope coroutineScope, Project project) {
+        this.continuePluginService = continuePluginService;
+        this.coroutineScope = coroutineScope;
+        this.project = project;
+
+        this.ide = new EclipseIde(project, continuePluginService);
+
         VirtualFileManager.getInstance().addAsyncFileListener(
-            AsyncFileSaveListener(continuePluginService), ContinuePluginDisposable.getInstance(project)
-        )
+                new AsyncFileSaveListener(continuePluginService), ContinuePluginDisposable.getInstance(project)
+        );
     }
 
-    fun handleMessage(msg: String, respond: (Any?) -> Unit) {
-        coroutineScope.launch(Dispatchers.IO) {
-            val message = Gson().fromJson(msg, Message::class.java)
-            val messageType = message.messageType
-            val dataElement = message.data
+    public void handleMessage(String msg, ResponseCallback respond) {
+        coroutineScope.launch(Dispatchers.IO, () -> {
+            Gson gson = new Gson();
+            Message message = gson.fromJson(msg, Message.class);
+            String messageType = message.getMessageType();
+            Object dataElement = message.getData();
 
             try {
-                when (messageType) {
-                    "toggleDevTools" -> {
-                        continuePluginService.continuePluginWindow?.browser?.browser?.openDevtools()
-                    }
+                switch (messageType) {
+                    case "toggleDevTools":
+                        continuePluginService.getContinuePluginWindow().getBrowser().openDevTools();
+                        break;
 
-                    "showTutorial" -> {
-                        showTutorial(project)
-                    }
+                    case "showTutorial":
+                        showTutorial(project);
+                        break;
 
-                    "jetbrains/isOSREnabled" -> {
-                        val isOSREnabled =
-                            ServiceManager.getService(ContinueExtensionSettings::class.java).continueState.enableOSR
-                        respond(isOSREnabled)
-                    }
+                    case "jetbrains/isOSREnabled":
+                        boolean isOSREnabled = ServiceManager.getService(ContinueExtensionSettings.class).getContinueState().isEnableOSR();
+                        respond.onResponse(isOSREnabled);
+                        break;
 
-                    "jetbrains/getColors" -> {
-                        val colors = GetTheme().getTheme();
-                        respond(colors)
-                    }
+                    case "jetbrains/getColors":
+                        Map<String, String> colors = GetTheme.getTheme();
+                        respond.onResponse(colors);
+                        break;
 
-                    "jetbrains/onLoad" -> {
-                        val jsonData = mutableMapOf(
-                            "windowId" to continuePluginService.windowId,
-                            "workspacePaths" to continuePluginService.workspacePaths,
-                            "vscMachineId" to getMachineUniqueID(),
-                            "vscMediaUrl" to "http://continue",
-                        )
-                        respond(jsonData)
-                    }
+                    case "jetbrains/onLoad":
+                        Map<String, Object> jsonData = new HashMap<>();
+                        jsonData.put("windowId", continuePluginService.getWindowId());
+                        jsonData.put("workspacePaths", continuePluginService.getWorkspacePaths());
+                        jsonData.put("vscMachineId", getMachineUniqueID());
+                        jsonData.put("vscMediaUrl", "http://continue");
+                        respond.onResponse(jsonData);
+                        break;
 
-                    "getIdeSettings" -> {
-                        val settings = ide.getIdeSettings()
-                        respond(settings)
-                    }
+                    case "getIdeSettings":
+                        Map<String, Object> settings = ide.getIdeSettings();
+                        respond.onResponse(settings);
+                        break;
 
-                    "getControlPlaneSessionInfo" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            GetControlPlaneSessionInfoParams::class.java
-                        )
-                        val authService = service<ContinueAuthService>()
+                    case "getControlPlaneSessionInfo":
+                        GetControlPlaneSessionInfoParams params = gson.fromJson(dataElement.toString(), GetControlPlaneSessionInfoParams.class);
+                        ContinueAuthService authService = service(ContinueAuthService.class);
 
-                        if (params.silent) {
-                            val sessionInfo = authService.loadControlPlaneSessionInfo()
-                            respond(sessionInfo)
+                        if (params.isSilent()) {
+                            Map<String, Object> sessionInfo = authService.loadControlPlaneSessionInfo();
+                            respond.onResponse(sessionInfo);
                         } else {
-                            authService.startAuthFlow(project, params.useOnboarding)
-                            respond(null)
+                            authService.startAuthFlow(project, params.useOnboarding());
+                            respond.onResponse(null);
                         }
-                    }
+                        break;
 
-                    "logoutOfControlPlane" -> {
-                        val authService = service<ContinueAuthService>()
-                        authService.signOut()
-                        ApplicationManager.getApplication().messageBus.syncPublisher(AuthListener.TOPIC)
-                            .handleUpdatedSessionInfo(null)
+                    case "logoutOfControlPlane":
+                        authService = service(ContinueAuthService.class);
+                        authService.signOut();
+                        ApplicationManager.getApplication().getMessageBus().syncPublisher(AuthListener.TOPIC)
+                                .handleUpdatedSessionInfo(null);
 
                         // Tell the webview that session info changed
-                        continuePluginService.sendToWebview("didChangeControlPlaneSessionInfo", null, uuid())
+                        continuePluginService.sendToWebview("didChangeControlPlaneSessionInfo", null, UUID.randomUUID().toString());
 
-                        respond(null)
-                    }
+                        respond.onResponse(null);
+                        break;
 
-                    "getIdeInfo" -> {
-                        val ideInfo = ide.getIdeInfo()
-                        respond(ideInfo)
-                    }
+                    case "getIdeInfo":
+                        Map<String, Object> ideInfo = ide.getIdeInfo();
+                        respond.onResponse(ideInfo);
+                        break;
 
-                    "getUniqueId" -> {
-                        val uniqueId = ide.getUniqueId()
-                        respond(uniqueId)
-                    }
+                    case "getUniqueId":
+                        String uniqueId = ide.getUniqueId();
+                        respond.onResponse(uniqueId);
+                        break;
 
-                    "copyText" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            CopyTextParams::class.java
-                        )
-                        val textToCopy = params.text
-                        val clipboard = Toolkit.getDefaultToolkit().systemClipboard
-                        val stringSelection = StringSelection(textToCopy)
-                        clipboard.setContents(stringSelection, stringSelection)
-                        respond(null)
-                    }
+                    case "copyText":
+                        CopyTextParams copyParams = gson.fromJson(dataElement.toString(), CopyTextParams.class);
+                        String textToCopy = copyParams.getText();
+                        Clipboard clipboard = new Clipboard(Display.getDefault());
+                        clipboard.setContents(new Object[]{textToCopy}, new Transfer[]{TextTransfer.getInstance()});
+                        clipboard.dispose();
+                        respond.onResponse(null);
+                        break;
 
-                    "showDiff" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            ShowDiffParams::class.java
-                        )
-                        ide.showDiff(params.filepath, params.newContents, params.stepIndex)
-                        respond(null)
-                    }
+                    case "showDiff":
+                        ShowDiffParams showDiffParams = gson.fromJson(dataElement.toString(), ShowDiffParams.class);
+                        ide.showDiff(showDiffParams.getFilepath(), showDiffParams.getNewContents(), showDiffParams.getStepIndex());
+                        respond.onResponse(null);
+                        break;
 
-                    "readFile" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            ReadFileParams::class.java
-                        )
-                        val contents = ide.readFile(params.filepath)
-                        respond(contents)
-                    }
+                    case "readFile":
+                        ReadFileParams readFileParams = gson.fromJson(dataElement.toString(), ReadFileParams.class);
+                        String contents = ide.readFile(readFileParams.getFilepath());
+                        respond.onResponse(contents);
+                        break;
 
-                    "isTelemetryEnabled" -> {
-                        val isEnabled = ide.isTelemetryEnabled()
-                        respond(isEnabled)
-                    }
+                    case "isTelemetryEnabled":
+                        boolean isEnabled = ide.isTelemetryEnabled();
+                        respond.onResponse(isEnabled);
+                        break;
 
-                    "readRangeInFile" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            ReadRangeInFileParams::class.java
-                        )
-                        val contents = ide.readRangeInFile(params.filepath, params.range)
-                        respond(contents)
-                    }
+                    case "readRangeInFile":
+                        ReadRangeInFileParams readRangeParams = gson.fromJson(dataElement.toString(), ReadRangeInFileParams.class);
+                        String rangeContents = ide.readRangeInFile(readRangeParams.getFilepath(), readRangeParams.getRange());
+                        respond.onResponse(rangeContents);
+                        break;
 
-                    "getWorkspaceDirs" -> {
-                        val dirs = ide.getWorkspaceDirs()
-                        respond(dirs)
-                    }
+                    case "getWorkspaceDirs":
+                        List<String> dirs = ide.getWorkspaceDirs();
+                        respond.onResponse(dirs);
+                        break;
 
-                    "getTags" -> {
-                        val artifactId = Gson().fromJson(
-                            dataElement.toString(),
-                            getTagsParams::class.java
-                        )
-                        val tags = ide.getTags(artifactId)
-                        respond(tags)
-                    }
+                    case "getTags":
+                        GetTagsParams getTagsParams = gson.fromJson(dataElement.toString(), GetTagsParams.class);
+                        List<String> tags = ide.getTags(getTagsParams.getArtifactId());
+                        respond.onResponse(tags);
+                        break;
 
-                    "getWorkspaceConfigs" -> {
-                        val configs = ide.getWorkspaceConfigs()
-                        respond(configs)
-                    }
+                    case "getWorkspaceConfigs":
+                        Map<String, Object> workspaceConfigs = ide.getWorkspaceConfigs();
+                        respond.onResponse(workspaceConfigs);
+                        break;
 
-                    "getTerminalContents" -> {
-                        val contents = ide.getTerminalContents()
-                        respond(contents)
-                    }
+                    case "getTerminalContents":
+                        String terminalContents = ide.getTerminalContents();
+                        respond.onResponse(terminalContents);
+                        break;
 
-                    "saveFile" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            SaveFileParams::class.java
-                        )
-                        ide.saveFile(params.filepath)
-                        respond(null)
-                    }
+                    case "saveFile":
+                        SaveFileParams saveFileParams = gson.fromJson(dataElement.toString(), SaveFileParams.class);
+                        ide.saveFile(saveFileParams.getFilepath());
+                        respond.onResponse(null);
+                        break;
 
-                    "showVirtualFile" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            ShowVirtualFileParams::class.java
-                        )
-                        ide.showVirtualFile(params.name, params.content)
-                        respond(null)
-                    }
+                    case "showVirtualFile":
+                        ShowVirtualFileParams showVirtualFileParams = gson.fromJson(dataElement.toString(), ShowVirtualFileParams.class);
+                        ide.showVirtualFile(showVirtualFileParams.getName(), showVirtualFileParams.getContent());
+                        respond.onResponse(null);
+                        break;
 
-                    "showLines" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            ShowLinesParams::class.java
-                        )
-                        ide.showLines(params.filepath, params.startLine, params.endLine)
-                        respond(null)
-                    }
+                    case "showLines":
+                        ShowLinesParams showLinesParams = gson.fromJson(dataElement.toString(), ShowLinesParams.class);
+                        ide.showLines(showLinesParams.getFilepath(), showLinesParams.getStartLine(), showLinesParams.getEndLine());
+                        respond.onResponse(null);
+                        break;
 
-                    "getFileStats" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            GetFileStatsParams::class.java
-                        )
-                        val fileStatsMap = ide.getFileStats(params.files)
-                        respond(fileStatsMap)
-                    }
+                    case "getFileStats":
+                        GetFileStatsParams getFileStatsParams = gson.fromJson(dataElement.toString(), GetFileStatsParams.class);
+                        Map<String, Object> fileStatsMap = ide.getFileStats(getFileStatsParams.getFiles());
+                        respond.onResponse(fileStatsMap);
+                        break;
 
-                    "listDir" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            ListDirParams::class.java
-                        )
+                    case "listDir":
+                        ListDirParams listDirParams = gson.fromJson(dataElement.toString(), ListDirParams.class);
+                        List<String> files = ide.listDir(listDirParams.getDir());
+                        respond.onResponse(files);
+                        break;
 
-                        val files = ide.listDir(params.dir)
+                    case "getGitRootPath":
+                        GetGitRootPathParams gitRootPathParams = gson.fromJson(dataElement.toString(), GetGitRootPathParams.class);
+                        String rootPath = ide.getGitRootPath(gitRootPathParams.getDir());
+                        respond.onResponse(rootPath);
+                        break;
 
-                        respond(files)
-                    }
+                    case "getBranch":
+                        GetBranchParams branchParams = gson.fromJson(dataElement.toString(), GetBranchParams.class);
+                        String branch = ide.getBranch(branchParams.getDir());
+                        respond.onResponse(branch);
+                        break;
 
-                    "getGitRootPath" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            GetGitRootPathParams::class.java
-                        )
-                        val rootPath = ide.getGitRootPath(params.dir)
-                        respond(rootPath)
-                    }
+                    case "getRepoName":
+                        GetRepoNameParams repoNameParams = gson.fromJson(dataElement.toString(), GetRepoNameParams.class);
+                        String repoName = ide.getRepoName(repoNameParams.getDir());
+                        respond.onResponse(repoName);
+                        break;
 
-                    "getBranch" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            GetBranchParams::class.java
-                        )
-                        val branch = ide.getBranch(params.dir)
-                        respond(branch)
-                    }
+                    case "getDiff":
+                        GetDiffParams diffParams = gson.fromJson(dataElement.toString(), GetDiffParams.class);
+                        List<String> diffs = ide.getDiff(diffParams.isIncludeUnstaged());
+                        respond.onResponse(diffs);
+                        break;
 
-                    "getRepoName" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            GetRepoNameParams::class.java
-                        )
-                        val repoName = ide.getRepoName(params.dir)
-                        respond(repoName)
-                    }
+                    case "getProblems":
+                        List<String> problems = ide.getProblems();
+                        respond.onResponse(problems);
+                        break;
 
-                    "getDiff" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            GetDiffParams::class.java
-                        )
-                        val diffs = ide.getDiff(params.includeUnstaged)
-                        respond(diffs)
-                    }
+                    case "writeFile":
+                        WriteFileParams writeFileParams = gson.fromJson(dataElement.toString(), WriteFileParams.class);
+                        ide.writeFile(writeFileParams.getPath(), writeFileParams.getContents());
+                        respond.onResponse(null);
+                        break;
 
-                    "getProblems" -> {
-                        val problems = ide.getProblems()
-                        respond(problems)
-                    }
+                    case "fileExists":
+                        FileExistsParams fileExistsParams = gson.fromJson(dataElement.toString(), FileExistsParams.class);
+                        boolean exists = ide.fileExists(fileExistsParams.getFilepath());
+                        respond.onResponse(exists);
+                        break;
 
-                    "writeFile" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            WriteFileParams::class.java
-                        )
-                        ide.writeFile(params.path, params.contents)
-                        respond(null)
-                    }
+                    case "openFile":
+                        OpenFileParams openFileParams = gson.fromJson(dataElement.toString(), OpenFileParams.class);
+                        ide.openFile(openFileParams.getPath());
+                        respond.onResponse(null);
+                        break;
 
-                    "fileExists" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            FileExistsParams::class.java
-                        )
-                        val exists = ide.fileExists(params.filepath)
-                        respond(exists)
-                    }
+                    case "runCommand":
+                        // Running commands not yet supported in Eclipse
+                        respond.onResponse(null);
+                        break;
 
-                    "openFile" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            OpenFileParams::class.java
-                        )
-                        ide.openFile(params.path)
-                        respond(null)
-                    }
-
-                    "runCommand" -> {
-                        // Running commands not yet supported in JetBrains
-                        respond(null)
-                    }
-
-                    "showToast" -> {
-                        val jsonArray = dataElement.asJsonArray
+                    case "showToast":
+                        List<Object> jsonArray = (List<Object>) dataElement;
 
                         // Get toast type from first element, default to INFO if invalid
-                        val typeStr = if (jsonArray.size() > 0) jsonArray[0].asString else ToastType.INFO.value
-                        val type = ToastType.values().find { it.value == typeStr } ?: ToastType.INFO
+                        String typeStr = jsonArray.size() > 0 ? (String) jsonArray.get(0) : ToastType.INFO.getValue();
+                        ToastType type = ToastType.fromValue(typeStr);
 
                         // Get message from second element
-                        val message = if (jsonArray.size() > 1) jsonArray[1].asString else ""
+                        String toastMessage = jsonArray.size() > 1 ? (String) jsonArray.get(1) : "";
 
                         // Get remaining elements as otherParams
-                        val otherParams = if (jsonArray.size() > 2) {
-                            jsonArray.drop(2).map { it.asString }.toTypedArray()
-                        } else {
-                            emptyArray()
-                        }
+                        String[] otherParams = jsonArray.size() > 2 ? jsonArray.subList(2, jsonArray.size()).toArray(new String[0]) : new String[0];
 
-                        val result = ide.showToast(type, message, *otherParams)
-                        respond(result)
-                    }
+                        Object result = ide.showToast(type, toastMessage, otherParams);
+                        respond.onResponse(result);
+                        break;
 
-                    "getSearchResults" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            GetSearchResultsParams::class.java
-                        )
-                        val results = ide.getSearchResults(params.query)
-                        respond(results)
-                    }
+                    case "getSearchResults":
+                        GetSearchResultsParams searchResultsParams = gson.fromJson(dataElement.toString(), GetSearchResultsParams.class);
+                        List<SearchResult> results = ide.getSearchResults(searchResultsParams.getQuery());
+                        respond.onResponse(results);
+                        break;
 
-                    "getOpenFiles" -> {
-                        val openFiles = ide.getOpenFiles()
-                        respond(openFiles)
-                    }
+                    case "getOpenFiles":
+                        List<String> openFiles = ide.getOpenFiles();
+                        respond.onResponse(openFiles);
+                        break;
 
-                    "getCurrentFile" -> {
-                        val currentFile = ide.getCurrentFile()
-                        respond(currentFile)
-                    }
+                    case "getCurrentFile":
+                        String currentFile = ide.getCurrentFile();
+                        respond.onResponse(currentFile);
+                        break;
 
-                    "getPinnedFiles" -> {
-                        val pinnedFiles = ide.getPinnedFiles()
-                        respond(pinnedFiles)
-                    }
+                    case "getPinnedFiles":
+                        List<String> pinnedFiles = ide.getPinnedFiles();
+                        respond.onResponse(pinnedFiles);
+                        break;
 
-                    "getGitHubAuthToken" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            GetGhTokenArgs::class.java
-                        )
-
-                        val ghAuthToken = ide.getGitHubAuthToken(params)
+                    case "getGitHubAuthToken":
+                        GetGhTokenArgs ghTokenArgs = gson.fromJson(dataElement.toString(), GetGhTokenArgs.class);
+                        String ghAuthToken = ide.getGitHubAuthToken(ghTokenArgs);
 
                         if (ghAuthToken == null) {
                             // Open a dialog so user can enter their GitHub token
-                            continuePluginService.sendToWebview("openOnboardingCard", null, uuid())
-                            respond(null)
+                            continuePluginService.sendToWebview("openOnboardingCard", null, UUID.randomUUID().toString());
+                            respond.onResponse(null);
                         } else {
-                            respond(ghAuthToken)
+                            respond.onResponse(ghAuthToken);
                         }
-                    }
+                        break;
 
-                    "setGitHubAuthToken" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            SetGitHubAuthTokenParams::class.java
-                        )
-                        val continueSettingsService = service<ContinueExtensionSettings>()
-                        continueSettingsService.continueState.ghAuthToken = params.token
-                        respond(null)
-                    }
+                    case "setGitHubAuthToken":
+                        SetGitHubAuthTokenParams authTokenParams = gson.fromJson(dataElement.toString(), SetGitHubAuthTokenParams.class);
+                        ContinueExtensionSettings continueSettingsService = service(ContinueExtensionSettings.class);
+                        continueSettingsService.getContinueState().setGhAuthToken(authTokenParams.getToken());
+                        respond.onResponse(null);
+                        break;
 
-                    "openUrl" -> {
-                        val url = Gson().fromJson(
-                            dataElement.toString(),
-                            OpenUrlParam::class.java
-                        )
-                        ide.openUrl(url)
-                        respond(null)
-                    }
+                    case "openUrl":
+                        OpenUrlParam urlParam = gson.fromJson(dataElement.toString(), OpenUrlParam.class);
+                        ide.openUrl(urlParam.getUrl());
+                        respond.onResponse(null);
+                        break;
 
-                    "insertAtCursor" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            InsertAtCursorParams::class.java
-                        )
+                    case "insertAtCursor":
+                        InsertAtCursorParams insertParams = gson.fromJson(dataElement.toString(), InsertAtCursorParams.class);
+                        Display.getDefault().asyncExec(() -> {
+                            ITextEditor editor = getSelectedTextEditor();
+                            if (editor == null) return;
+                            ITextSelection selection = (ITextSelection) editor.getSelectionProvider().getSelection();
+                            IDocument document = editor.getDocumentProvider().getDocument(editor.getEditorInput());
 
-                        ApplicationManager.getApplication().invokeLater {
-                            val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return@invokeLater
-                            val selectionModel: SelectionModel = editor.selectionModel
-
-                            val document = editor.document
-                            val startOffset = selectionModel.selectionStart
-                            val endOffset = selectionModel.selectionEnd
-
-                            WriteCommandAction.runWriteCommandAction(project) {
-                                document.replaceString(startOffset, endOffset, params.text)
+                            try {
+                                document.replace(selection.getOffset(), selection.getLength(), insertParams.getText());
+                            } catch (Exception e) {
+                                e.printStackTrace();
                             }
-                        }
-                    }
+                        });
+                        respond.onResponse(null);
+                        break;
 
-                    "applyToFile" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            ApplyToFileParams::class.java
-                        )
-
-                        val editor = FileEditorManager.getInstance(project).selectedTextEditor
+                    case "applyToFile":
+                        ApplyToFileParams applyParams = gson.fromJson(dataElement.toString(), ApplyToFileParams.class);
+                        ITextEditor editor = getSelectedTextEditor();
 
                         if (editor == null) {
-                            ide.showToast(ToastType.ERROR, "No active editor to apply edits to")
-                            respond(null)
-                            return@launch
+                            ide.showToast(ToastType.ERROR, "No active editor to apply edits to");
+                            respond.onResponse(null);
+                            return;
                         }
 
-                        if (editor.document.text.trim().isEmpty()) {
-                            WriteCommandAction.runWriteCommandAction(project) {
-                                editor.document.insertString(0, params.text)
+                        IDocument document = editor.getDocumentProvider().getDocument(editor.getEditorInput());
+                        if (document.get().trim().isEmpty()) {
+                            try {
+                                document.replace(0, 0, applyParams.getText());
+                            } catch (Exception e) {
+                                e.printStackTrace();
                             }
-                            respond(null)
-                            return@launch
+                            respond.onResponse(null);
+                            return;
                         }
 
-                        val llm: Any = try {
-                            suspendCancellableCoroutine { continuation ->
-                                continuePluginService.coreMessenger?.request(
-                                    "config/getSerializedProfileInfo",
-                                    null,
-                                    null
-                                ) { response ->
-                                    try {
-                                        val responseObject = response as Map<*, *>
-                                        val responseContent = responseObject["content"] as Map<*, *>
-                                        val result = responseContent["result"] as Map<*, *>
-                                        val config = result["config"] as Map<*, *>
+                        Any llm;
+                        try {
+                            ResponseFuture responseFuture = continuePluginService.getCoreMessenger().request(
+                                    "config/getSerializedProfileInfo", null, null
+                            );
 
-                                        val selectedModels = config["selectedModelByRole"] as? Map<*, *>
-                                        val applyCodeBlockModel = selectedModels?.get("apply") as? Map<*, *>
+                            Map<String, Object> responseObject = (Map<String, Object>) responseFuture.getResponse();
+                            Map<String, Object> responseContent = (Map<String, Object>) responseObject.get("content");
+                            Map<String, Object> result = (Map<String, Object>) responseContent.get("result");
+                            Map<String, Object> config = (Map<String, Object>) result.get("config");
 
-                                        if (applyCodeBlockModel != null) {
-                                            continuation.resume(applyCodeBlockModel)
-                                        } else {
-                                            val models =
-                                                config["models"] as List<Map<String, Any>>
-                                            val curSelectedModel =
-                                                models.find { it["title"] == params.curSelectedModelTitle }
+                            Map<String, Object> selectedModels = (Map<String, Object>) config.get("selectedModelByRole");
+                            llm = selectedModels != null ? selectedModels.get("apply") : null;
 
-                                            if (curSelectedModel == null) {
-                                                continuation.resumeWithException(IllegalStateException("Model '${params.curSelectedModelTitle}' not found in config."))
-                                            } else {
-                                                continuation.resume(curSelectedModel)
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        continuation.resumeWithException(e)
-                                    }
-                                }
+                            if (llm == null) {
+                                List<Map<String, Object>> models = (List<Map<String, Object>>) config.get("models");
+                                llm = models.stream()
+                                        .filter(model -> model.get("title").equals(applyParams.getCurSelectedModelTitle()))
+                                        .findFirst()
+                                        .orElseThrow(() -> new IllegalStateException("Model '" + applyParams.getCurSelectedModelTitle() + "' not found in config."));
                             }
-                        } catch (e: Exception) {
-                            launch {
-                                ide.showToast(
-                                    ToastType.ERROR, "Failed to fetch model configuration"
-                                )
-                            }
-                            respond(null)
-                            return@launch
+                        } catch (Exception e) {
+                            PlatformUI.getWorkbench().getDisplay().asyncExec(() -> {
+                                ide.showToast(ToastType.ERROR, "Failed to fetch model configuration");
+                            });
+                            respond.onResponse(null);
+                            return;
                         }
 
-                        val diffStreamService = project.service<DiffStreamService>()
-                        // Clear all diff blocks before running the diff stream
-                        diffStreamService.reject(editor)
+                        DiffStreamService diffStreamService = project.service(DiffStreamService.class);
+                        diffStreamService.reject(editor);
 
-                        val llmTitle = (llm as? Map<*, *>)?.get("title") as? String ?: ""
+                        String llmTitle = (String) ((Map<String, Object>) llm).get("title");
 
-                        val prompt =
-                            "The following code was suggested as an edit:\n```\n${params.text}\n```\nPlease apply it to the previous code."
+                        String prompt = "The following code was suggested as an edit:\n```\n" + applyParams.getText() + "\n```\nPlease apply it to the previous code.";
 
-                        val rif = getHighlightedCode()
+                        RangeInFileWithContents rif = getHighlightedCode();
 
-                        val (prefix, highlighted, suffix) = if (rif == null) {
+                        String prefix, highlighted, suffix;
+                        if (rif == null) {
                             // If no highlight, use the whole document as highlighted
-                            Triple("", editor.document.text, "")
+                            prefix = "";
+                            highlighted = document.get();
+                            suffix = "";
                         } else {
-                            val prefix = editor.document.getText(TextRange(0, rif.range.start.character))
-                            val highlighted = rif.contents
-                            val suffix =
-                                editor.document.getText(TextRange(rif.range.end.character, editor.document.textLength))
+                            prefix = document.get(rif.getRange().getStart().getCharacter());
+                            highlighted = rif.getContents();
+                            suffix = document.get(rif.getRange().getEnd().getCharacter(), document.getLength());
 
                             // Remove the selection after processing
-                            ApplicationManager.getApplication().invokeLater {
-                                editor.selectionModel.removeSelection()
-                            }
+                            PlatformUI.getWorkbench().getDisplay().asyncExec(() -> {
+                                editor.getSelectionProvider().setSelection(new TextSelection(
+                                        editor.getDocumentProvider().getDocument(editor.getEditorInput()),
+                                        rif.getRange().getStart().getLine(),
+                                        rif.getRange().getEnd().getLine()
+                                ));
+                            });
 
-                            Triple(prefix, highlighted, suffix)
+                            Document doc = document;
+                            prefix = doc.get().substring(0, doc.getLineOffset(rif.getRange().getStart().getLine()));
+                            highlighted = doc.get().substring(doc.getLineOffset(rif.getRange().getStart().getLine()), doc.getLineOffset(rif.getRange().getEnd().getLine()));
+                            suffix = doc.get().substring(doc.getLineOffset(rif.getRange().getEnd().getLine()));
                         }
 
-                        val diffStreamHandler =
-                            DiffStreamHandler(
-                                project,
-                                editor,
-                                rif?.range?.start?.line ?: 0,
-                                rif?.range?.end?.line ?: (editor.document.lineCount - 1),
-                                {}, {})
+                        DiffStreamHandler diffStreamHandler = new DiffStreamHandler(project, editor, rif != null ? rif.getRange().getStart().getLine() : 0,
+                                rif != null ? rif.getRange().getEnd().getLine() : document.getNumberOfLines() - 1, () -> {}, () -> {});
 
-                        diffStreamService.register(diffStreamHandler, editor)
+                        diffStreamService.register(diffStreamHandler, editor);
 
-                        diffStreamHandler.streamDiffLinesToEditor(
-                            prompt, prefix, highlighted, suffix, llmTitle
-                        )
+                        diffStreamHandler.streamDiffLinesToEditor(prompt, prefix, highlighted, suffix, llmTitle);
 
-                        respond(null)
-                    }
+                        respond.onResponse(null);
+                        break;
 
-                    else -> {
-                        println("Unknown message type: $messageType")
-                    }
+                    default:
+                        System.out.println("Unknown message type: " + messageType);
+                        break;
                 }
-            } catch (error: Exception) {
-                ide.showToast(ToastType.ERROR, " Error handling message of type $messageType: $error")
+            } catch (Exception error) {
+                ide.showToast(ToastType.ERROR, "Error handling message of type " + messageType + ": " + error.getMessage());
             }
-        }
+        });
     }
 
-    private fun getHighlightedCode(): RangeInFileWithContents? {
-        val result = ApplicationManager.getApplication().runReadAction<RangeInFileWithContents?> {
+    private RangeInFileWithContents getHighlightedCode() {
+        RangeInFileWithContents rif = null;
+        ApplicationManager.getApplication().runReadAction(() -> {
             // Get the editor instance for the currently active editor window
-            val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return@runReadAction null
-            val virtualFile =
-                editor.let { FileDocumentManager.getInstance().getFile(it.document) } ?: return@runReadAction null
+            ITextEditor editor = getSelectedTextEditor();
+            IFile virtualFile = editor != null ? (IFile) editor.getEditorInput().getAdapter(IFile.class) : null;
 
             // Get the selection range and content
-            val selectionModel: SelectionModel = editor.selectionModel
-            val selectedText = selectionModel.selectedText ?: ""
+            ITextSelection selectionModel = (ITextSelection) editor.getSelectionProvider().getSelection();
+            String selectedText = selectionModel.getText();
 
-            val document = editor.document
-            val startOffset = selectionModel.selectionStart
-            val endOffset = selectionModel.selectionEnd
+            IDocument document = editor.getDocumentProvider().getDocument(editor.getEditorInput());
+            int startOffset = selectionModel.getOffset();
+            int endOffset = selectionModel.getOffset() + selectionModel.getLength();
 
             if (startOffset == endOffset) {
-                return@runReadAction null
+                rif = null;
+                return;
             }
 
-            val startLine = document.getLineNumber(startOffset)
-            val endLine = document.getLineNumber(endOffset)
+            int startLine = document.getLineOfOffset(startOffset) + 1;
+            int endLine = document.getLineOfOffset(endOffset) + 1;
 
-            val startChar = startOffset - document.getLineStartOffset(startLine)
-            val endChar = endOffset - document.getLineStartOffset(endLine)
+            int startChar = startOffset - document.getLineOffset(startLine - 1);
+            int endChar = endOffset - document.getLineOffset(endLine - 1);
 
-            return@runReadAction virtualFile.toUriOrNull()?.let {
-                RangeInFileWithContents(
-                    it, Range(
-                        Position(startLine, startChar),
-                        Position(endLine, endChar)
-                    ), selectedText
-                )
+            if (virtualFile != null) {
+                rif = new RangeInFileWithContents(virtualFile.getFullPath().toString(), new Range(
+                        new Position(startLine, startChar),
+                        new Position(endLine, endChar)
+                ), selectedText);
             }
+        });
+        return rif;
+    }
+
+    public void sendHighlightedCode(boolean edit) {
+        RangeInFileWithContents rif = getHighlightedCode();
+        if (rif == null) {
+            return;
         }
-
-        return result
+        Map<String, Object> data = new HashMap<>();
+        data.put("rangeInFileWithContents", rif);
+        data.put("edit", edit);
+        continuePluginService.sendToWebview("highlightedCode", data);
     }
 
-    fun sendHighlightedCode(edit: Boolean = false) {
-        val rif = getHighlightedCode() ?: return
-
-        continuePluginService.sendToWebview(
-            "highlightedCode",
-            mapOf(
-                "rangeInFileWithContents" to rif,
-                "edit" to edit
-            )
-        )
+    public void sendHighlightedCode() {
+        sendHighlightedCode(false);
     }
 
-
-    fun sendAcceptRejectDiff(accepted: Boolean, stepIndex: Int) {
-        continuePluginService.sendToWebview("acceptRejectDiff", AcceptRejectDiff(accepted, stepIndex), uuid())
+    public void sendAcceptRejectDiff(boolean accepted, int stepIndex) {
+        continuePluginService.sendToWebview("acceptRejectDiff", new AcceptRejectDiff(accepted, stepIndex), uuid());
     }
 
-    fun deleteAtIndex(index: Int) {
-        continuePluginService.sendToWebview("deleteAtIndex", DeleteAtIndex(index), uuid())
+    public void deleteAtIndex(int index) {
+        continuePluginService.sendToWebview("deleteAtIndex", new DeleteAtIndex(index), uuid());
     }
 }
