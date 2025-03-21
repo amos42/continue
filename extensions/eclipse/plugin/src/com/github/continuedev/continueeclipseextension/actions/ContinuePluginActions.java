@@ -8,6 +8,9 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchWindow;
 import org.eclipse.ui.IWorkbenchWindowActionDelegate;
 import org.eclipse.ui.texteditor.ITextEditor;
+
+import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
+
 import org.eclipse.swt.widgets.Shell;
 
 import java.util.HashMap;

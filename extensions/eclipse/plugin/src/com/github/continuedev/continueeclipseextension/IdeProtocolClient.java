@@ -1,6 +1,9 @@
 package com.github.continuedev.continueeclipseextension;
 
 import com.github.continuedev.continueeclipseextension.*;
+import com.github.continuedev.continueeclipseextension.Types.IDE;
+import com.github.continuedev.continueeclipseextension.Types.RangeInFileWithContents;
+import com.github.continuedev.continueeclipseextension.activities.ContinuePluginDisposable;
 import com.github.continuedev.continueeclipseextension.auth.AuthListener;
 import com.github.continuedev.continueeclipseextension.auth.ContinueAuthService;
 import com.github.continuedev.continueeclipseextension.editor.DiffStreamHandler;
@@ -24,7 +27,6 @@ import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
-import org.eclipse.ui.ide.IDE;
 import org.eclipse.ui.texteditor.ITextEditor;
 
 import java.awt.Toolkit;

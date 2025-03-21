@@ -7,7 +7,6 @@ import com.github.continuedev.continueeclipseextension.constants.ContinueConstan
 import com.github.continuedev.continueeclipseextension.listener.ContinuePluginSelectionListener;
 import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
 import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
-import com.github.continuedev.continueeclipseextension.utils.FileUtils;
 
 import org.eclipse.jface.action.Action;
 import org.eclipse.jface.action.IAction;

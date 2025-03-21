@@ -1,5 +1,6 @@
 package com.github.continuedev.continueeclipseextension;
 
+import com.github.continuedev.continueeclipseextension.Types.ContinueRcJson;
 import com.github.continuedev.continueeclipseextension.Types.GetGhTokenArgs;
 import com.github.continuedev.continueeclipseextension.Types.IDE;
 import com.github.continuedev.continueeclipseextension.Types.IdeCallback;
@@ -13,8 +14,8 @@ import com.github.continuedev.continueeclipseextension.Types.ToastType;
 import com.github.continuedev.continueeclipseextension.constants.GetContinueGlobalPath;
 import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
 import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
-import com.github.continuedev.continueeclipseextension.utils.OS;
-import com.github.continuedev.continueeclipseextension.utils.GetMachineUniqueID;
+import com.github.continuedev.continueeclipseextension.utils.Utils.OS;
+import com.github.continuedev.continueeclipseextension.utils.Utils;
 import com.google.gson.Gson;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.ResourcesPlugin;

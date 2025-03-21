@@ -5,6 +5,8 @@ import com.github.continuedev.continueeclipseextension.services.ContinueExtensio
 import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
 import com.github.continuedev.continueeclipseextension.services.TelemetryService;
 import com.github.continuedev.continueeclipseextension.utils.uuid;
+import com.google.gson.Gson;
+
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;

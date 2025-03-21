@@ -1,6 +1,6 @@
 package com.github.continuedev.continueeclipseextension.auth;
 
-import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
+import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettingsService;
 import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
 import com.github.continuedev.continueeclipseextension.utils.Desktop;
 import com.google.gson.Gson;
