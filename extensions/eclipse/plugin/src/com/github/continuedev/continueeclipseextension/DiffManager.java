@@ -4,6 +4,8 @@ import com.github.continuedev.continueeclipseextension.services.ContinuePluginSe
 import org.eclipse.jface.dialogs.Dialog;
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.swt.SWT;
+import org.eclipse.swt.events.SelectionAdapter;
+import org.eclipse.swt.events.SelectionEvent;
 import org.eclipse.swt.graphics.Rectangle;
 import org.eclipse.swt.layout.FillLayout;
 import org.eclipse.swt.widgets.*;
@@ -11,24 +13,30 @@ import org.eclipse.ui.PlatformUI;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Diffs {
+public class DiffManager {
+    public static class DiffInfo {
+        String originalFilepath;
+        String newFilepath;
+        Dialog dialog;
+        int stepIndex;
+    }
+
     private final Map<String, DiffInfo> diffInfoMap;
     private String lastFile2;
     private final Shell shell;
 
-    public Diffs() {
+    public DiffManager() {
         this.diffInfoMap = new HashMap<>();
         this.shell = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
     }
 
-    public File getDiffDirectory() {
+    public static File getDiffDirectory() {
         String homeDirectory = System.getProperty("user.home");
         Path diffDirPath = Paths.get(homeDirectory).resolve(".continue").resolve(".diffs");
         File diffDir = diffDirPath.toFile();
@@ -39,7 +47,7 @@ public class Diffs {
         return diffDir;
     }
 
-    public String escapeFilepath(String filepath) {
+    public static String escapeFilepath(String filepath) {
         return filepath.replace("/", "_f_").replace("\\", "_b_").replace(":", "_c_");
     }
 
@@ -110,8 +118,8 @@ public class Diffs {
         lastFile2 = file2;
 
         try {
-            String content1 = new String(Files.readAllBytes(new File(URI(file1)).toPath()));
-            String content2 = new String(Files.readAllBytes(new File(URI(file2)).toPath()));
+            String content1 = new String(Files.readAllBytes(new File(file1).toPath()));
+            String content2 = new String(Files.readAllBytes(new File(file2).toPath()));
 
             DiffInfo diffInfo = diffInfoMap.get(file2);
             boolean shouldShowDialog = diffInfo == null;
@@ -205,12 +213,5 @@ public class Diffs {
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    private static class DiffInfo {
-        String originalFilepath;
-        String newFilepath;
-        Dialog dialog;
-        int stepIndex;
     }
 }

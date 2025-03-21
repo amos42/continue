@@ -1,5 +1,8 @@
 package com.github.continuedev.continueeclipseextension;
 
+import com.github.continuedev.continueeclipseextension.Types.IdeInfo;
+import com.github.continuedev.continueeclipseextension.Types.IdeSettings;
+import com.github.continuedev.continueeclipseextension.Types.IdeType;
 import com.github.continuedev.continueeclipseextension.constants.GetContinueGlobalPath;
 import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
 import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;

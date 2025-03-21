@@ -1,12 +1,16 @@
 package com.github.continuedev.continueeclipseextension;
 
+import java.util.List;
+import java.util.Map;
+
 import com.google.gson.JsonElement;
 
 public class Types {
 
     public enum IdeType {
         JETBRAINS("jetbrains"),
-        VSCODE("vscode");
+        VSCODE("vscode"),
+    	ECLIPSE("eclipse");
 
         private final String value;
         IdeType(String value) {
