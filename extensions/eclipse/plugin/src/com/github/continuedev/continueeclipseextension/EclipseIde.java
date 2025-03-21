@@ -1,8 +1,15 @@
 package com.github.continuedev.continueeclipseextension;
 
+import com.github.continuedev.continueeclipseextension.Types.GetGhTokenArgs;
+import com.github.continuedev.continueeclipseextension.Types.IDE;
+import com.github.continuedev.continueeclipseextension.Types.IdeCallback;
 import com.github.continuedev.continueeclipseextension.Types.IdeInfo;
 import com.github.continuedev.continueeclipseextension.Types.IdeSettings;
 import com.github.continuedev.continueeclipseextension.Types.IdeType;
+import com.github.continuedev.continueeclipseextension.Types.Location;
+import com.github.continuedev.continueeclipseextension.Types.Range;
+import com.github.continuedev.continueeclipseextension.Types.RangeInFile;
+import com.github.continuedev.continueeclipseextension.Types.ToastType;
 import com.github.continuedev.continueeclipseextension.constants.GetContinueGlobalPath;
 import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
 import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
@@ -22,7 +29,6 @@ import org.eclipse.ui.IEditorPart;
 import org.eclipse.ui.IWorkbenchPage;
 import org.eclipse.ui.PartInitException;
 import org.eclipse.ui.PlatformUI;
-import org.eclipse.ui.ide.IDE;
 import org.osgi.framework.Bundle;
 
 import java.io.*;
@@ -258,7 +264,7 @@ public class EclipseIde implements IDE {
     }
 
     @Override
-    public String readRangeInFile(String filepath, Range range) {
+    public String readRangeInFile(String filepath, Range range) throws Exception {    
         String fullContents = readFile(filepath);
         List<String> lines = Arrays.asList(fullContents.split("\n"));
         int startLine = range.getStart().getLine();
@@ -450,7 +456,7 @@ public class EclipseIde implements IDE {
     }
 
     @Override
-    public String showToast(String type, String message, String... otherParams) {
+    public Object showToast(ToastType type, String message, Object... otherParams) throws Exception {
         // Eclipse는 NotificationAction과 같은 기능이 없으므로 간단하게 MessageDialog를 사용
         Display.getDefault().asyncExec(() -> {
             switch (type.toLowerCase()) {
@@ -515,17 +521,17 @@ public class EclipseIde implements IDE {
     }
 
     @Override
-    public String getGitHubAuthToken(GetGhTokenArgs args) {
+   	public String getGitHubAuthToken(GetGhTokenArgs args) throws Exception {
         return continuePluginService.getContinueExtensionSettings().getContinueState().getGhAuthToken();
     }
 
     @Override
-    public List<RangeInFile> gotoDefinition(Location location) {
+   	public List<RangeInFile> gotoDefinition(Location location) throws Exception {
         throw new UnsupportedOperationException("gotoDefinition not implemented yet");
     }
 
     @Override
-    public void onDidChangeActiveTextEditor(java.util.function.Consumer<String> callback) {
+    public void onDidChangeActiveTextEditor(IdeCallback callback) {
         throw new UnsupportedOperationException("onDidChangeActiveTextEditor not implemented yet");
     }
 

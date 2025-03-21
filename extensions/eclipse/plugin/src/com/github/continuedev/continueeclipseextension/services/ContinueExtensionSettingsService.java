@@ -1,154 +1,232 @@
 package com.github.continuedev.continueeclipseextension.services;
 
-import com.github.continuedev.continueeclipseextension.CoreMessenger;
-import com.github.continuedev.continueeclipseextension.CoreMessengerManager;
-import com.github.continuedev.continueeclipseextension.DiffManager;
-import com.github.continuedev.continueeclipseextension.IdeProtocolClient;
-import com.github.continuedev.continueeclipseextension.toolWindow.ContinuePluginToolWindowFactory;
-import com.github.continuedev.continueeclipseextension.toolWindow.ContinuePluginToolWindowFactory.ContinuePluginWindow;
-import com.github.continuedev.continueeclipseextension.utils.Utils;
+import com.github.continuedev.continueeclipseextension.constants.PluginConstants;
+import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import org.eclipse.jface.preference.FieldEditorPreferencePage;
+import org.eclipse.jface.preference.StringFieldEditor;
+import org.eclipse.swt.widgets.Button;
+import org.eclipse.swt.widgets.Composite;
+import org.eclipse.ui.IWorkbench;
+import org.eclipse.ui.IWorkbenchPreferencePage;
 
-import org.eclipse.core.runtime.jobs.Job;
-import org.eclipse.core.runtime.jobs.ISchedulingRule;
-import org.eclipse.core.runtime.jobs.NonRule;
-import org.eclipse.ui.plugin.AbstractUIPlugin;
-import org.eclipse.ui.IWorkbenchWindow;
-import org.osgi.framework.BundleContext;
+import java.io.File;
+import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
-import java.util.UUID;
+public class ContinueExtensionSettingsService extends FieldEditorPreferencePage implements IWorkbenchPreferencePage {
+    private StringFieldEditor remoteConfigServerUrl;
+    private StringFieldEditor remoteConfigSyncPeriod;
+    private StringFieldEditor userToken;
+    private Button enableTabAutocomplete;
+    private Button enableContinueTeamsBeta;
+    private Button enableOSR;
+    private Button displayEditorTooltip;
+    private Button showIDECompletionSideBySide;
 
-public class ContinuePluginService implements org.eclipse.ui.services.IDisposable, org.eclipse.ui.services.IDumbAware {
-    private Job debouncingJob;
-    private ContinuePluginWindow continuePluginWindow;
-    private IdeProtocolClient ideProtocolClient;
-    private CoreMessengerManager coreMessengerManager;
-    private String[] workspacePaths;
-    private String windowId = Utils.uuid();
-    private DiffManager diffManager;
+    private ScheduledFuture<?> remoteSyncFuture;
+    private ScheduledExecutorService scheduler;
 
-    public ContinuePluginService() {
-        coreMessengerManager = new CoreMessengerManager();
-        ideProtocolClient = new IdeProtocolClient();
-        diffManager = new DiffManager();
-        workspacePaths = new String[]{getWorkspacePath()};
+    public ContinueExtensionSettingsService() {
+        super(GRID);
+        setPreferenceStore(ActivatePlugin.getDefault().getPreferenceStore());
+        setDescription("계속 엑스텐션 설정을 관리합니다.");
+    }
+
+    @Override
+    protected void createFieldEditors() {
+        Composite parent = getFieldEditorParent();
+        remoteConfigServerUrl = new StringFieldEditor(PluginConstants.REMOTE_CONFIG_SERVER_URL, "원격 설정 서버 URL:", parent);
+        remoteConfigSyncPeriod = new StringFieldEditor(PluginConstants.REMOTE_CONFIG_SYNC_PERIOD, "원격 설정 동기화 주기 (분):", parent);
+        userToken = new StringFieldEditor(PluginConstants.USER_TOKEN, "사용자 토큰:", parent);
+        enableTabAutocomplete = new Button(parent, org.eclipse.swt.SWT.CHECK);
+        enableTabAutocomplete.setText("탭 자동완성을 활성화");
+        addField(new CheckboxPreferenceEditor(PluginConstants.ENABLE_TAB_AUTOCOMPLETE, enableTabAutocomplete));
+        enableContinueTeamsBeta = new Button(parent, org.eclipse.swt.SWT.CHECK);
+        enableContinueTeamsBeta.setText("컨티뉴 팀즈 베타를 활성화");
+        addField(new CheckboxPreferenceEditor(PluginConstants.ENABLE_CONTINUE_TEAMS_BETA, enableContinueTeamsBeta));
+        enableOSR = new Button(parent, org.eclipse.swt.SWT.CHECK);
+        enableOSR.setText("오프스크린 렌더링 활성화");
+        addField(new CheckboxPreferenceEditor(PluginConstants.ENABLE_OSR, enableOSR));
+        displayEditorTooltip = new Button(parent, org.eclipse.swt.SWT.CHECK);
+        displayEditorTooltip.setText("에디터 툴팁 표시");
+        addField(new CheckboxPreferenceEditor(PluginConstants.DISPLAY_EDITOR_TOOLTIP, displayEditorTooltip));
+        showIDECompletionSideBySide = new Button(parent, org.eclipse.swt.SWT.CHECK);
+        showIDECompletionSideBySide.setText("IDE 완성도도를 옆으로 표시");
+        addField(new CheckboxPreferenceEditor(PluginConstants.SHOW_IDE_COMPLETION_SIDE_BY_SIDE, showIDECompletionSideBySide));
+    }
+
+    @Override
+    public void init(IWorkbench workbench) {
+        scheduler = Executors.newScheduledThreadPool(1);
+        addRemoteSyncJob();
+    }
+
+    @Override
+    public boolean performOk() {
+        boolean result = super.performOk();
+        if (result) {
+            // 설정 변경에 따른 리스너 호출 및 스케줄 작업 업데이트
+            sendSettingsUpdatedEvent();
+            resetSyncJob();
+        }
+        return result;
+    }
+
+    @Override
+    protected void performDefaults() {
+        super.performDefaults();
+        // 기본값 설정 및 스케줄 작업 업데이트
+        sendSettingsUpdatedEvent();
+        resetSyncJob();
+    }
+
+    private void sendSettingsUpdatedEvent() {
+        // Eclipse에서는 일반적으로 IEventBroker를 사용합니다.
+        // 일단, 해당 기능은 별도의 구현이 필요합니다.
+        // 여기서는 단순히 메시지를 보내는 것만 구현했습니다.
+        // IEventBroker eventBroker = PlatformUI.getWorkbench().getService(IEventBroker.class);
+        // eventBroker.send("settingsUpdated", getContinueState());
+    }
+
+    private ContinueState getContinueState() {
+        ContinueState state = new ContinueState();
+        state.remoteConfigServerUrl = remoteConfigServerUrl.getStringValue();
+        state.remoteConfigSyncPeriod = Integer.parseInt(remoteConfigSyncPeriod.getStringValue());
+        state.userToken = userToken.getStringValue();
+        state.enableTabAutocomplete = enableTabAutocomplete.getSelection();
+        state.enableContinueTeamsBeta = enableContinueTeamsBeta.getSelection();
+        state.enableOSR = enableOSR.getSelection();
+        state.displayEditorTooltip = displayEditorTooltip.getSelection();
+        state.showIDECompletionSideBySide = showIDECompletionSideBySide.getSelection();
+        return state;
+    }
+
+    private void resetSyncJob() {
+        if (remoteSyncFuture != null) {
+            remoteSyncFuture.cancel(false);
+        }
+        addRemoteSyncJob();
+    }
+
+    private void addRemoteSyncJob() {
+        ContinueState state = getContinueState();
+        if (state.remoteConfigServerUrl != null && !state.remoteConfigServerUrl.isEmpty()) {
+            remoteSyncFuture = scheduler.scheduleWithFixedDelay(() -> syncRemoteConfig(state), 0,
+                    state.remoteConfigSyncPeriod, TimeUnit.MINUTES);
+        }
+    }
+
+    private void syncRemoteConfig(ContinueState state) {
+        OkHttpClient client = new OkHttpClient();
+        String baseUrl = state.remoteConfigServerUrl.trim().replaceAll("/$", "");
+
+        Request.Builder requestBuilder = new Request.Builder().url(baseUrl + "/sync");
+
+        if (state.userToken != null) {
+            requestBuilder.addHeader("Authorization", "Bearer " + state.userToken);
+        }
+
+        Request request = requestBuilder.build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) throw new IOException("서버에서 성공적인 응답을 받지 못했습니다.");
+
+            String responseBody = response.body().string();
+            ContinueRemoteConfigSyncResponse configResponse;
+            try {
+                configResponse = new Gson().fromJson(responseBody, ContinueRemoteConfigSyncResponse.class);
+            } catch (JsonSyntaxException e) {
+                e.printStackTrace();
+                return;
+            }
+
+            if (configResponse.configJson != null && !configResponse.configJson.isEmpty()) {
+                File file = new File(PluginConstants.getConfigJsonPath(request.url.host()));
+                file.writeText(configResponse.configJson);
+            }
+
+            if (configResponse.configJs != null && !configResponse.configJs.isEmpty()) {
+                File file = new File(PluginConstants.getConfigJsPath(request.url.host()));
+                file.writeText(configResponse.configJs);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private boolean shouldRenderOffScreen() {
+        int minBuildNumber = 233;
+        return Integer.parseInt(org.eclipse.ui.PlatformUI.getWorkbench().getVersion()) >= minBuildNumber;
     }
 
     @Override
     public void dispose() {
-        if (debouncingJob != null) {
-            debouncingJob.cancel();
+        super.dispose();
+        remoteSyncFuture.cancel(false);
+        scheduler.shutdown();
+    }
+
+    private static class ContinueState {
+        String lastSelectedInlineEditModel;
+        boolean shownWelcomeDialog;
+        String remoteConfigServerUrl;
+        int remoteConfigSyncPeriod = 60;
+        String userToken;
+        boolean enableTabAutocomplete = true;
+        String ghAuthToken;
+        boolean enableContinueTeamsBeta = false;
+        boolean enableOSR = shouldRenderOffScreen();
+        boolean displayEditorTooltip = true;
+        boolean showIDECompletionSideBySide = false;
+        String continueTestEnvironment = "production";
+
+        private static boolean shouldRenderOffScreen() {
+            int minBuildNumber = 233;
+            // Eclipse 버전을 기준으로 판단하는 로직이 필요합니다.
+            // 아래는 가상의 버전 추출 로직입니다.
+            return Integer.parseInt(org.eclipse.ui.PlatformUI.getWorkbench().getVersion()) >= minBuildNumber;
+        }
+    }
+
+    private static class ContinueRemoteConfigSyncResponse {
+        String configJson;
+        String configJs;
+    }
+
+    private static class CheckboxPreferenceEditor extends org.eclipse.jface.preference.BooleanFieldEditor {
+        private Button button;
+
+        CheckboxPreferenceEditor(String name, Button button) {
+            super(name, name, button.getParent());
+            this.button = button;
         }
 
-        if (coreMessengerManager != null && coreMessengerManager.getCoreMessenger() != null) {
-            coreMessengerManager.getCoreMessenger().getCoroutineScope().cancel();
-            coreMessengerManager.getCoreMessenger().killSubProcess();
-        }
-    }
-
-    public void sendToWebview(String messageType, Object data, String messageId) {
-        if (continuePluginWindow != null && continuePluginWindow.getBrowser() != null) {
-            continuePluginWindow.getBrowser().sendToWebview(messageType, data, messageId);
-        }
-    }
-
-    public void sendToWebview(String messageType, Object data) {
-        sendToWebview(messageType, data, Utils.uuid());
-    }
-
-    private String getWorkspacePath() {
-        // Eclipse의 Workspace 경로를 반환합니다.
-        return AbstractUIPlugin.getPluginPreferences().getString("workspace_path");
-    }
-
-    public CoreMessenger getCoreMessenger() {
-        if (coreMessengerManager != null) {
-            return coreMessengerManager.getCoreMessenger();
-        }
-        return null;
-    }
-
-    public void setContinuePluginWindow(ContinuePluginWindow continuePluginWindow) {
-        this.continuePluginWindow = continuePluginWindow;
-    }
-
-    public void setWorkspacePaths(String[] workspacePaths) {
-        this.workspacePaths = workspacePaths;
-    }
-
-    public String getWindowId() {
-        return windowId;
-    }
-
-    public void setWindowId(String windowId) {
-        this.windowId = windowId;
-    }
-
-    public IdeProtocolClient getIdeProtocolClient() {
-        return ideProtocolClient;
-    }
-
-    public void setIdeProtocolClient(IdeProtocolClient ideProtocolClient) {
-        this.ideProtocolClient = ideProtocolClient;
-    }
-
-    public CoreMessengerManager getCoreMessengerManager() {
-        return coreMessengerManager;
-    }
-
-    public void setCoreMessengerManager(CoreMessengerManager coreMessengerManager) {
-        this.coreMessengerManager = coreMessengerManager;
-    }
-
-    public String[] getWorkspacePaths() {
-        return workspacePaths;
-    }
-
-    public DiffManager getDiffManager() {
-        return diffManager;
-    }
-
-    public void setDiffManager(DiffManager diffManager) {
-        this.diffManager = diffManager;
-    }
-
-    // 예시로.debouncingJob을 생성하는 메서드 추가
-    public void performActionWithDebounce(Runnable action, long delay, TimeUnit unit) {
-        if (debouncingJob != null) {
-            debouncingJob.cancel();
-        }
-
-        debouncingJob = new Job("Continue Plugin Debouncing Job") {
-            @Override
-            protected org.eclipse.core.runtime.IStatus run(org.eclipse.core.runtime.IProgressMonitor monitor) {
-                action.run();
-                return org.eclipse.core.runtime.Status.OK_STATUS;
+        @Override
+        protected void doLoad() {
+            if (button != null) {
+                button.setSelection(preferences.getBoolean(getPreferenceName(), false));
             }
-        };
+        }
 
-        debouncingJob.setRule(NonRule.INSTANCE);
-        debouncingJob.schedule((long) (delay * unit.toMillis(1)));
-    }
+        @Override
+        protected void doLoadDefault() {
+            if (button != null) {
+                button.setSelection(getPreferenceStore().getDefaultBoolean(getPreferenceName()));
+            }
+        }
 
-    // OSGi BundleContext를 초기화하는 메서드 추가
-    @Override
-    public void initialize(org.eclipse.ui.services.IServiceLocator serviceLocator) {
-        // 초기화 로직 추가 (예: ToolWindow 생성 등)
-        IWorkbenchWindow window = PlatformUI.getWorkbench().getActiveWorkbenchWindow();
-        continuePluginWindow = new ContinuePluginToolWindowFactory.ContinuePluginWindow(window);
-    }
-
-    // 활성화 메서드 추가
-    public void start(BundleContext context) throws Exception {
-        super.start(context);
-        // 필요한 초기화 작업 수행
-        performActionWithDebounce(() -> {
-            // 초기 작업
-        }, 1, TimeUnit.SECONDS);
-    }
-
-    // 비활성화 메서드 추가
-    public void stop(BundleContext context) throws Exception {
-        dispose();
-        super.stop(context);
+        @Override
+        protected void doStore() {
+            if (button != null) {
+                getPreferenceStore().setValue(getPreferenceName(), button.getSelection());
+            }
+        }
     }
 }
