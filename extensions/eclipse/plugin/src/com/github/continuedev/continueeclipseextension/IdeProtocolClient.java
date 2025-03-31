@@ -1,8 +1,8 @@
 package com.github.continuedev.continueeclipseextension;
 
 import com.github.continuedev.continueeclipseextension.*;
-import com.github.continuedev.continueeclipseextension.Types.IDE;
-import com.github.continuedev.continueeclipseextension.Types.RangeInFileWithContents;
+import com.github.continuedev.continueeclipseextension.type.IDE;
+import com.github.continuedev.continueeclipseextension.type.RangeInFileWithContents;
 import com.github.continuedev.continueeclipseextension.activities.ContinuePluginDisposable;
 import com.github.continuedev.continueeclipseextension.auth.AuthListener;
 import com.github.continuedev.continueeclipseextension.auth.ContinueAuthService;
@@ -10,6 +10,13 @@ import com.github.continuedev.continueeclipseextension.editor.DiffStreamHandler;
 import com.github.continuedev.continueeclipseextension.editor.DiffStreamService;
 import com.github.continuedev.continueeclipseextension.protocol.*;
 import com.github.continuedev.continueeclipseextension.services.*;
+import com.github.continuedev.continueeclipseextension.type.AcceptRejectDiff;
+import com.github.continuedev.continueeclipseextension.type.DeleteAtIndex;
+import com.github.continuedev.continueeclipseextension.type.GetGhTokenArgs;
+import com.github.continuedev.continueeclipseextension.type.Message;
+import com.github.continuedev.continueeclipseextension.type.Position;
+import com.github.continuedev.continueeclipseextension.type.Range;
+import com.github.continuedev.continueeclipseextension.type.ToastType;
 import com.github.continuedev.continueeclipseextension.utils.*;
 import com.google.gson.Gson;
 import org.eclipse.core.resources.IFile;

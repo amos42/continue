@@ -3,180 +3,507 @@ package com.github.continuedev.continueeclipseextension.activities;
 import com.github.continuedev.continueeclipseextension.auth.AuthListener;
 import com.github.continuedev.continueeclipseextension.auth.ContinueAuthService;
 import com.github.continuedev.continueeclipseextension.auth.ControlPlaneSessionInfo;
-import com.github.continuedev.continueeclipseextension.constants.ContinueConstants;
-import com.github.continuedev.continueeclipseextension.listener.ContinuePluginSelectionListener;
+import com.github.continuedev.continueeclipseextension.CoreMessenger;
+import com.github.continuedev.continueeclipseextension.CoreMessengerManager;
+import com.github.continuedev.continueeclipseextension.DiffManager;
+import com.github.continuedev.continueeclipseextension.GetTheme;
+import com.github.continuedev.continueeclipseextension.IdeProtocolClient;
+import com.github.continuedev.continueeclipseextension.listeners.ContinuePluginSelectionListener;
 import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
 import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
-
-import org.eclipse.jface.action.Action;
-import org.eclipse.jface.action.IAction;
-import org.eclipse.jface.action.IToolBarManager;
-import org.eclipse.jface.action.KeyBinding;
-import org.eclipse.jface.action.KeyStroke;
-import org.eclipse.jface.bindings.keys.KeySequence;
-import org.eclipse.jface.bindings.keys.ParseException;
-import org.eclipse.jface.resource.ImageDescriptor;
-import org.eclipse.swt.widgets.Display;
-import org.eclipse.ui.IEditorPart;
-import org.eclipse.ui.IFileEditorInput;
-import org.eclipse.ui.IPageLayout;
-import org.eclipse.ui.IPerspectiveDescriptor;
-import org.eclipse.ui.IPerspectiveListener;
-import org.eclipse.ui.IStartup;
-import org.eclipse.ui.IWorkbench;
-import org.eclipse.ui.IWorkbenchPage;
-import org.eclipse.ui.PartInitException;
-import org.eclipse.ui.PlatformUI;
-import org.eclipse.ui.ide.IDE;
-import org.eclipse.ui.plugin.AbstractUIPlugin;
-import org.eclipse.ui.texteditor.ITextEditor;
-import org.eclipse.ui.texteditor.KeyBindingAction;
-import org.eclipse.ui.views.contentoutline.ContentOutline;
-import org.eclipse.core.resources.IFile;
-import org.eclipse.core.resources.IProject;
-import org.eclipse.core.resources.ResourcesPlugin;
-import org.eclipse.core.runtime.CoreException;
-import org.eclipse.core.runtime.Path;
-import org.eclipse.ui.part.EditorPart;
-import org.eclipse.ui.texteditor.AbstractTextEditor;
-
-import java.io.*;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.HashMap;
+import com.github.continuedev.continueeclipseextension.services.SettingsListener;
+import com.github.continuedev.continueeclipseextension.utils.UtilsKt;
+import com.intellij.codeWithMe.ClientId;
+import com.intellij.ide.ui.LafManager;
+import com.intellij.ide.ui.LafManagerListener;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.actionSystem.KeyboardShortcut;
+import com.intellij.openapi.actionSystem.Shortcut;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.components.ServiceManager;
+import com.intellij.openapi.editor.EditorFactory;
+import com.intellij.openapi.editor.event.SelectionListener;
+import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.fileEditor.FileEditorManagerListener;
+import com.intellij.openapi.keymap.Keymap;
+import com.intellij.openapi.keymap.KeymapManager;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.project.DumbAware;
+import com.intellij.openapi.project.Project;
+import com.intellij.openapi.roots.ModuleRootManager;
+import com.intellij.openapi.startup.StartupActivity;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VirtualFileManager;
+import com.intellij.openapi.vfs.newvfs.BulkFileListener;
+import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent;
+import com.intellij.util.messages.MessageBusConnection;
+import com.intellij.util.messages.Topic;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import javax.swing.KeyStroke;
+import kotlin.Pair;
+import kotlin.ResultKt;
+import kotlin.TuplesKt;
+import kotlin.Unit;
+import kotlin.collections.CollectionsKt;
+import kotlin.collections.MapsKt;
+import kotlin.coroutines.Continuation;
+import kotlin.coroutines.CoroutineContext;
+import kotlin.coroutines.intrinsics.IntrinsicsKt;
+import kotlin.jvm.functions.Function2;
+import kotlin.jvm.internal.Intrinsics;
+import kotlin.jvm.internal.SourceDebugExtension;
+import kotlin.text.StringsKt;
+import kotlinx.coroutines.BuildersKt;
+import kotlinx.coroutines.CoroutineScope;
+import kotlinx.coroutines.CoroutineScopeKt;
+import kotlinx.coroutines.CoroutineStart;
+import kotlinx.coroutines.Dispatchers;
+import org.jetbrains.annotations.NotNull;
 
-public class ContinuePluginStartupActivity implements IStartup {
+public final class ContinuePluginStartupActivity implements StartupActivity, DumbAware {
+   public void runActivity(@NotNull Project project) {
+      Intrinsics.checkNotNullParameter(project, "project");
+      this.removeShortcutFromAction(this.getPlatformSpecificKeyStroke("J"));
+      this.removeShortcutFromAction(this.getPlatformSpecificKeyStroke("shift J"));
+      this.removeShortcutFromAction(this.getPlatformSpecificKeyStroke("I"));
+      this.initializePlugin(project);
+   }
 
-    @Override
-    public void earlyStartup() {
-        IWorkbench workbench = PlatformUI.getWorkbench();
-        workbench.addPerspectiveListener(new IPerspectiveListener() {
-            @Override
-            public void perspectiveActivated(IWorkbenchPage page, IPerspectiveDescriptor perspective) {
-                removeKeyBindingFromActions("J", "control");
-                removeKeyBindingFromActions("shift J", "control");
-                removeKeyBindingFromActions("I", "control");
-                initializePlugin(page);
+   private final String getPlatformSpecificKeyStroke(String key) {
+      String modifier = System.getProperty("os.name");
+      Intrinsics.checkNotNullExpressionValue(modifier, "getProperty(...)");
+      String var10000 = modifier.toLowerCase();
+      Intrinsics.checkNotNullExpressionValue(var10000, "this as java.lang.String).toLowerCase()");
+      String osName = var10000;
+      modifier = StringsKt.contains$default((CharSequence)osName, (CharSequence)"mac", false, 2, (Object)null) ? "meta" : "control";
+      return modifier + ' ' + key;
+   }
 
-                // Eclipse와 IntelliJ의 불필요한 차이를 제거하거나 대체하는 주석.
-                // 이를 실제 Eclipse의 기능에 맞게 코딩해야 합니다.
+   private final void removeShortcutFromAction(String shortcut) {
+      Keymap keyStroke = KeymapManager.getInstance().getActiveKeymap();
+      Intrinsics.checkNotNullExpressionValue(keyStroke, "getActiveKeymap(...)");
+      Keymap keymap = keyStroke;
+      KeyStroke keyStroke = KeyStroke.getKeyStroke(shortcut);
+      String[] $this$any$iv = keyStroke.getActionIds(keyStroke);
+      Intrinsics.checkNotNullExpressionValue($this$any$iv, "getActionIds(...)");
+      String[] actionIds = $this$any$iv;
+      Object[] $this$any$iv = $this$any$iv;
+      int $i$f$any = 0;
+      int actionId = 0;
+      int shortcuts = $this$any$iv.length;
+
+      boolean var10000;
+      while(true) {
+         if (actionId >= shortcuts) {
+            var10000 = false;
+            break;
+         }
+
+         Object element$iv = $this$any$iv[actionId];
+         int shortcut = 0;
+         Intrinsics.checkNotNull(element$iv);
+         if (StringsKt.startsWith$default((String)element$iv, "continue", false, 2, (Object)null)) {
+            var10000 = true;
+            break;
+         }
+
+         ++actionId;
+      }
+
+      if (var10000) {
+         int var14 = 0;
+
+         for(int var15 = $this$any$iv.length; var14 < var15; ++var14) {
+            String actionId = actionIds[var14];
+            Intrinsics.checkNotNull(actionId);
+            if (!StringsKt.startsWith$default(actionId, "continue", false, 2, (Object)null)) {
+               Shortcut[] it = keymap.getShortcuts(actionId);
+               Intrinsics.checkNotNullExpressionValue(it, "getShortcuts(...)");
+               Shortcut[] shortcuts = it;
+               int it = 0;
+
+               for(int it = it.length; it < it; ++it) {
+                  Shortcut shortcut = shortcuts[it];
+                  if (shortcut instanceof KeyboardShortcut && Intrinsics.areEqual(((KeyboardShortcut)shortcut).getFirstKeyStroke(), keyStroke)) {
+                     keymap.removeShortcut(actionId, shortcut);
+                  }
+               }
             }
+         }
 
-            @Override
-            public void perspectiveChanged(IWorkbenchPage page, IPerspectiveDescriptor perspective, String changeId) {
-                // Placeholder for perspective changed
-            }
-        });
-    }
+      }
+   }
 
-    private void removeKeyBindingFromActions(String key, String modifier) {
-        IAction action = AbstractTextEditor.getActionRegistry().getAction("continue." + key.toLowerCase());
-        if (action == null || !(action instanceof KeyBindingAction)) return;
+   private final void initializePlugin(final Project project) {
+      final CoroutineScope coroutineScope = CoroutineScopeKt.CoroutineScope((CoroutineContext)Dispatchers.getIO());
+      final ContinuePluginService continuePluginService = (ContinuePluginService)ServiceManager.getService(project, ContinuePluginService.class);
+      BuildersKt.launch$default(coroutineScope, (CoroutineContext)null, (CoroutineStart)null, new Function2((Continuation)null) {
+         int label;
 
-        KeyBindingAction keyBindingAction = (KeyBindingAction) action;
-        KeyBinding keyBinding = keyBindingAction.getKeyBinding();
-        if (keyBinding != null && keyBinding.getKeySequence().equals(getKeySequence(modifier + " " + key))) {
-            keyBindingAction.setKeyBinding(null);
-        }
-        // 명시적인 KeyStroke 제거는 Eclipse IDE에서 제공하는 방법으로 대체해야 합니다.
-    }
+         public final Object invokeSuspend(Object $result) {
+            Object var42 = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            switch (this.label) {
+               case 0:
+                  ResultKt.throwOnFailure($result);
+                  ContinueExtensionSettings settings = (ContinueExtensionSettings)ServiceManager.getService(ContinueExtensionSettings.class);
+                  if (!settings.getContinueState().getShownWelcomeDialog()) {
+                     settings.getContinueState().setShownWelcomeDialog(true);
+                     ContinuePluginStartupActivityKt.showTutorial(project);
+                  }
 
-    private KeySequence getKeySequence(String shortcut) {
-        try {
-            return KeySequence.getInstance(shortcut);
-        } catch (ParseException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    private void initializePlugin(IWorkbenchPage page) {
-        // 여기에 코루틴과 같은 비동기 처리는 있는 대로 Eclipse 방식의 스레딩으로 작성해야 합니다.
-        continuePluginService(page.getProject());
-        settingsListener(page.getProject());
-        // 파일 변경 리스너 같은 부분도 Eclipse의 리소스 변경 감지 시스템을 사용해야 합니다.
-        // 같은 개념이지만 구현이 완전히 다릅니다.
-    }
-
-    private void continuePluginService(IProject project) {
-        ContinuePluginService pluginService = new ContinuePluginService();
-        pluginService.init(project);
-
-        ContinueExtensionSettings settings = new ContinueExtensionSettings();
-        if (!settings.getState().isShownWelcomeDialog()) {
-            settings.getState().setShownWelcomeDialog(true);
-            showTutorial(project);
-        }
-
-        // 위와 같은 구조로 코루틴 부분을 Eclipse 스레딩으로 재구성해야 합니다.
-        // 예를 들어, Display.getDefault().asyncExec(Runnable runnable) 사용 등.
-    }
-
-    private void settingsListener(IProject project) {
-        // Eclipse 부스체 메시지 버스와 같은 대체 코드를 추가합니다.
-        // 이 코드는 Eclipse의 설정 변경 감지를 위한 것입니다.
-    }
-
-    private void showTutorial(IProject project) {
-        String tutorialFileName = getTutorialFileName();
-        InputStream is = this.getClass().getClassLoader().getResourceAsStream(tutorialFileName);
-        if (is == null) {
-            throw new IOException("Resource not found: " + tutorialFileName);
-        }
-
-        try {
-            String content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-
-            content = content.replace("[Cmd + L]", "[Cmd + J]");
-            content = content.replace("[Cmd + Shift + L]", "[Cmd + Shift + J]");
-
-            if (!System.getProperty("os.name").toLowerCase().contains("mac")) {
-                content = content.replace("[Cmd + J]", "[Ctrl + J]");
-                content = content.replace("[Cmd + Shift + J]", "[Ctrl + Shift + J]");
-                content = content.replace("[Cmd + I]", "[Ctrl + I]");
-                content = content.replace("⌘", "⌃");
-            }
-
-            String filepath = Paths.get(ContinueConstants.getContinueGlobalPath(), tutorialFileName).toString();
-            File file = new File(filepath);
-            Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
-
-            IWorkbenchPage workbenchPage = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
-            if (workbenchPage != null) {
-                IFile resourceFile = ResourcesPlugin.getWorkspace().getRoot().getFile(new Path(filepath));
-                if (resourceFile.exists()) {
-                    Display.getDefault().asyncExec(new Runnable() {
-                        @Override
-                        public void run() {
-                            try {
-                                IDE.openEditor(workbenchPage, resourceFile);
-                            } catch (PartInitException e) {
-                                e.printStackTrace();
-                            }
+                  settings.addRemoteSyncJob();
+                  ContinuePluginService diffManager = continuePluginService;
+                  Intrinsics.checkNotNull(diffManager);
+                  IdeProtocolClient ideProtocolClient = new IdeProtocolClient(diffManager, coroutineScope, project);
+                  DiffManager diffManager = new DiffManager(project);
+                  continuePluginService.setDiffManager(diffManager);
+                  continuePluginService.setIdeProtocolClient(ideProtocolClient);
+                  MessageBusConnection authService = ApplicationManager.getApplication().getMessageBus().connect();
+                  Intrinsics.checkNotNullExpressionValue(authService, "connect(...)");
+                  authService.subscribe(SettingsListener.Companion.getTOPIC(), new SettingsListener() {
+                     public void settingsUpdated(ContinueExtensionSettings.ContinueState settings) {
+                        Intrinsics.checkNotNullParameter(settings, "settings");
+                        CoreMessenger var2 = continuePluginService.getCoreMessenger();
+                        if (var2 != null) {
+                           var2.request("config/ideSettingsUpdate", settings, (String)null, null.INSTANCE);
                         }
-                    });
-                }
+
+                        ContinuePluginService var3 = continuePluginService;
+                        Intrinsics.checkNotNull(var3);
+                        ContinuePluginService var10000 = var3;
+                        Pair[] var4 = new Pair[]{TuplesKt.to("remoteConfigServerUrl", settings.getRemoteConfigServerUrl()), TuplesKt.to("remoteConfigSyncPeriod", settings.getRemoteConfigSyncPeriod()), TuplesKt.to("userToken", settings.getUserToken()), TuplesKt.to("enableControlServerBeta", settings.getEnableContinueTeamsBeta())};
+                        ContinuePluginService.sendToWebview$default(var10000, "didChangeIdeSettings", MapsKt.mapOf(TuplesKt.to("settings", MapsKt.mapOf(var4))), (String)null, 4, (Object)null);
+                     }
+                  });
+                  Topic var44 = VirtualFileManager.VFS_CHANGES;
+                  Intrinsics.checkNotNullExpressionValue(var44, "VFS_CHANGES");
+                  authService.subscribe(var44, new BulkFileListener() {
+                     public void after(List events) {
+                        Intrinsics.checkNotNullParameter(events, "events");
+                        Iterable $this$filterIsInstance$iv = (Iterable)events;
+                        int $i$f$filterIsInstance = 0;
+                        Collection destination$iv$iv = (Collection)(new ArrayList());
+                        int $i$f$filterIsInstanceTo = 0;
+
+                        for(Object element$iv$iv : $this$filterIsInstance$iv) {
+                           if (element$iv$iv instanceof VFileDeleteEvent) {
+                              destination$iv$iv.add(element$iv$iv);
+                           }
+                        }
+
+                        $this$filterIsInstance$iv = (Iterable)((List)destination$iv$iv);
+                        $i$f$filterIsInstance = 0;
+                        destination$iv$iv = (Collection)(new ArrayList());
+                        $i$f$filterIsInstanceTo = 0;
+                        int $i$f$forEach = 0;
+
+                        for(Object element$iv$iv$iv : $this$filterIsInstance$iv) {
+                           int element$iv$iv$iv = 0;
+                           VFileDeleteEvent event = (VFileDeleteEvent)element$iv$iv$iv;
+                           int var15 = 0;
+                           VirtualFile event = event.getFile();
+                           Intrinsics.checkNotNullExpressionValue(event, "getFile(...)");
+                           String var10000 = UtilsKt.toUriOrNull(event);
+                           if (var10000 != null) {
+                              String it$iv$iv = var10000;
+                              int it$iv$iv = 0;
+                              destination$iv$iv.add(it$iv$iv);
+                           }
+                        }
+
+                        List deletedURIs = (List)destination$iv$iv;
+                        if (!((Collection)deletedURIs).isEmpty()) {
+                           Map data = MapsKt.mapOf(TuplesKt.to("uris", deletedURIs));
+                           CoreMessenger $this$forEach$iv$iv$iv = continuePluginService.getCoreMessenger();
+                           if ($this$forEach$iv$iv$iv != null) {
+                              $this$forEach$iv$iv$iv.request("files/deleted", data, (String)null, null.INSTANCE);
+                           }
+                        }
+
+                        Iterable $this$filterIsInstance$iv = (Iterable)events;
+                        int $i$f$filterIsInstance = 0;
+                        Collection destination$iv$iv = (Collection)(new ArrayList());
+                        int $i$f$filterIsInstanceTo = 0;
+
+                        for(Object element$iv$iv : $this$filterIsInstance$iv) {
+                           if (element$iv$iv instanceof VFileContentChangeEvent) {
+                              destination$iv$iv.add(element$iv$iv);
+                           }
+                        }
+
+                        $this$filterIsInstance$iv = (Iterable)((List)destination$iv$iv);
+                        $i$f$filterIsInstance = 0;
+                        destination$iv$iv = (Collection)(new ArrayList());
+                        $i$f$filterIsInstanceTo = 0;
+                        int $i$f$forEach = 0;
+
+                        for(Object element$iv$iv$iv : $this$filterIsInstance$iv) {
+                           int var63 = 0;
+                           VFileContentChangeEvent event = (VFileContentChangeEvent)element$iv$iv$iv;
+                           int var66 = 0;
+                           VirtualFile it$iv$iv = event.getFile();
+                           Intrinsics.checkNotNullExpressionValue(it$iv$iv, "getFile(...)");
+                           String var72 = UtilsKt.toUriOrNull(it$iv$iv);
+                           if (var72 != null) {
+                              String it$iv$iv = var72;
+                              int it$iv$iv = 0;
+                              destination$iv$iv.add(it$iv$iv);
+                           }
+                        }
+
+                        List changedURIs = (List)destination$iv$iv;
+                        if (!((Collection)changedURIs).isEmpty()) {
+                           Map data = MapsKt.mapOf(TuplesKt.to("uris", changedURIs));
+                           CoreMessenger it = continuePluginService.getCoreMessenger();
+                           if (it != null) {
+                              it.request("files/changed", data, (String)null, null.INSTANCE);
+                           }
+                        }
+
+                        Iterable $this$filterIsInstance$iv = (Iterable)events;
+                        int $i$f$filterIsInstance = 0;
+                        Collection destination$iv$iv = (Collection)(new ArrayList());
+                        $i$f$forEach = 0;
+
+                        for(Object element$iv$iv : $this$filterIsInstance$iv) {
+                           if (element$iv$iv instanceof VFileCreateEvent) {
+                              destination$iv$iv.add(element$iv$iv);
+                           }
+                        }
+
+                        $this$filterIsInstance$iv = (Iterable)((List)destination$iv$iv);
+                        $i$f$filterIsInstance = 0;
+                        destination$iv$iv = (Collection)(new ArrayList());
+                        $i$f$forEach = 0;
+                        int $i$f$forEach = 0;
+
+                        for(Object element$iv$iv$iv : $this$filterIsInstance$iv) {
+                           int var65 = 0;
+                           VFileCreateEvent event = (VFileCreateEvent)element$iv$iv$iv;
+                           int var69 = 0;
+                           VirtualFile it$iv$iv = event.getFile();
+                           String var73 = it$iv$iv != null ? UtilsKt.toUriOrNull(it$iv$iv) : null;
+                           if (var73 != null) {
+                              String it$iv$iv = var73;
+                              int var21 = 0;
+                              destination$iv$iv.add(it$iv$iv);
+                           }
+                        }
+
+                        List it = (List)destination$iv$iv;
+                        int var43 = 0;
+                        List $this$forEach$iv$iv$iv = !((Collection)it).isEmpty() ? it : null;
+                        if ($this$forEach$iv$iv$iv != null) {
+                           ContinuePluginService var39 = continuePluginService;
+                           int var48 = 0;
+                           Map data = MapsKt.mapOf(TuplesKt.to("uris", $this$forEach$iv$iv$iv));
+                           CoreMessenger var57 = var39.getCoreMessenger();
+                           if (var57 != null) {
+                              var57.request("files/created", data, (String)null, null.INSTANCE);
+                           }
+                        }
+
+                     }
+                  });
+                  Topic var45 = FileEditorManagerListener.FILE_EDITOR_MANAGER;
+                  Intrinsics.checkNotNullExpressionValue(var45, "FILE_EDITOR_MANAGER");
+                  authService.subscribe(var45, new FileEditorManagerListener() {
+                     public void fileClosed(FileEditorManager source, VirtualFile file) {
+                        Intrinsics.checkNotNullParameter(source, "source");
+                        Intrinsics.checkNotNullParameter(file, "file");
+                        String uri = UtilsKt.toUriOrNull(file);
+                        if (uri != null) {
+                           ContinuePluginService var5 = continuePluginService;
+                           int var7 = 0;
+                           Map data = MapsKt.mapOf(TuplesKt.to("uris", CollectionsKt.listOf(uri)));
+                           CoreMessenger var9 = var5.getCoreMessenger();
+                           if (var9 != null) {
+                              var9.request("files/closed", data, (String)null, null.INSTANCE);
+                           }
+                        }
+
+                     }
+
+                     public void fileOpened(FileEditorManager source, VirtualFile file) {
+                        Intrinsics.checkNotNullParameter(source, "source");
+                        Intrinsics.checkNotNullParameter(file, "file");
+                        String uri = UtilsKt.toUriOrNull(file);
+                        if (uri != null) {
+                           ContinuePluginService var5 = continuePluginService;
+                           int var7 = 0;
+                           Map data = MapsKt.mapOf(TuplesKt.to("uris", CollectionsKt.listOf(uri)));
+                           CoreMessenger var9 = var5.getCoreMessenger();
+                           if (var9 != null) {
+                              var9.request("files/opened", data, (String)null, null.INSTANCE);
+                           }
+                        }
+
+                     }
+                  });
+                  Topic var46 = LafManagerListener.TOPIC;
+                  Intrinsics.checkNotNullExpressionValue(var46, "TOPIC");
+                  authService.subscribe(var46, <undefinedtype>::invokeSuspend$lambda$0);
+                  int $i$f$service = 0;
+                  Class serviceClass$iv = ContinueAuthService.class;
+                  Object coreMessengerManager = ApplicationManager.getApplication().getService(serviceClass$iv);
+                  if (coreMessengerManager == null) {
+                     String var10002 = serviceClass$iv.getName();
+                     throw new RuntimeException("Cannot find service " + var10002 + " (classloader=" + serviceClass$iv.getClassLoader() + ", client=" + ClientId.Companion.getCurrentOrNull() + ")");
+                  }
+
+                  final ContinueAuthService authService = (ContinueAuthService)coreMessengerManager;
+                  ControlPlaneSessionInfo initialSessionInfo = authService.loadControlPlaneSessionInfo();
+                  if (initialSessionInfo != null) {
+                     Map data = MapsKt.mapOf(TuplesKt.to("sessionInfo", initialSessionInfo));
+                     CoreMessenger pluginService = continuePluginService.getCoreMessenger();
+                     if (pluginService != null) {
+                        pluginService.request("didChangeControlPlaneSessionInfo", data, (String)null, null.INSTANCE);
+                     }
+
+                     ContinuePluginService pluginService = continuePluginService;
+                     Intrinsics.checkNotNull(pluginService);
+                     ContinuePluginService.sendToWebview$default(pluginService, "didChangeControlPlaneSessionInfo", data, (String)null, 4, (Object)null);
+                  }
+
+                  authService.subscribe(AuthListener.Companion.getTOPIC(), new AuthListener() {
+                     public void startAuthFlow() {
+                        authService.startAuthFlow(project, false);
+                     }
+
+                     public void handleUpdatedSessionInfo(ControlPlaneSessionInfo sessionInfo) {
+                        Map data = MapsKt.mapOf(TuplesKt.to("sessionInfo", sessionInfo));
+                        CoreMessenger var3 = continuePluginService.getCoreMessenger();
+                        if (var3 != null) {
+                           var3.request("didChangeControlPlaneSessionInfo", data, (String)null, null.INSTANCE);
+                        }
+
+                        ContinuePluginService var4 = continuePluginService;
+                        Intrinsics.checkNotNull(var4);
+                        ContinuePluginService.sendToWebview$default(var4, "didChangeControlPlaneSessionInfo", data, (String)null, 4, (Object)null);
+                     }
+                  });
+                  ContinuePluginSelectionListener listener = new ContinuePluginSelectionListener(coroutineScope);
+                  ContinuePluginService pluginService = continuePluginService;
+                  if (pluginService != null) {
+                     Project var11 = project;
+                     int var13 = 0;
+                     Object[] $this$flatMap$iv = ModuleManager.Companion.getInstance(var11).getModules();
+                     int $i$f$flatMap = 0;
+                     Object $i$f$toTypedArray = $this$flatMap$iv;
+                     Collection destination$iv$iv = (Collection)(new ArrayList());
+                     int $i$f$flatMapTo = 0;
+                     int $i$f$filterTo = 0;
+
+                     for(int var20 = $this$flatMap$iv.length; $i$f$filterTo < var20; ++$i$f$filterTo) {
+                        Object element$iv$iv = ((Object[])$i$f$toTypedArray)[$i$f$filterTo];
+                        int var23 = 0;
+                        VirtualFile[] $this$none$iv = ModuleRootManager.getInstance((Module)element$iv$iv).getContentRoots();
+                        Intrinsics.checkNotNullExpressionValue($this$none$iv, "getContentRoots(...)");
+                        Object[] $this$mapNotNull$iv = (Object[])$this$none$iv;
+                        int $i$f$mapNotNull = 0;
+                        Collection destination$iv$iv = (Collection)(new ArrayList());
+                        int $i$f$mapNotNullTo = 0;
+                        Object[] $this$forEach$iv$iv$iv = $this$mapNotNull$iv;
+                        int $i$f$forEach = 0;
+                        int var31 = 0;
+
+                        for(int var32 = $this$mapNotNull$iv.length; var31 < var32; ++var31) {
+                           Object element$iv$iv$iv = $this$forEach$iv$iv$iv[var31];
+                           int var35 = 0;
+                           VirtualFile it = (VirtualFile)element$iv$iv$iv;
+                           int var37 = 0;
+                           Intrinsics.checkNotNull(it);
+                           String var72 = UtilsKt.toUriOrNull(it);
+                           if (var72 != null) {
+                              String it$iv$iv = var72;
+                              int var40 = 0;
+                              destination$iv$iv.add(it$iv$iv);
+                           }
+                        }
+
+                        Iterable list$iv$iv = (Iterable)((List)destination$iv$iv);
+                        CollectionsKt.addAll(destination$iv$iv, list$iv$iv);
+                     }
+
+                     List allModulePaths = (List)destination$iv$iv;
+                     Iterable $this$filter$iv = (Iterable)allModulePaths;
+                     int $i$f$filter = 0;
+                     Collection destination$iv$iv = (Collection)(new ArrayList());
+                     $i$f$filterTo = 0;
+
+                     for(Object element$iv$iv : $this$filter$iv) {
+                        String modulePath = (String)element$iv$iv;
+                        int var65 = 0;
+                        Iterable $this$none$iv = (Iterable)allModulePaths;
+                        int $i$f$none = 0;
+                        boolean var73;
+                        if ($this$none$iv instanceof Collection && ((Collection)$this$none$iv).isEmpty()) {
+                           var73 = true;
+                        } else {
+                           Iterator $this$mapNotNullTo$iv$iv = $this$none$iv.iterator();
+
+                           while(true) {
+                              if (!$this$mapNotNullTo$iv$iv.hasNext()) {
+                                 var73 = true;
+                                 break;
+                              }
+
+                              Object element$iv = $this$mapNotNullTo$iv$iv.next();
+                              String it = (String)element$iv;
+                              int var71 = 0;
+                              if (!Intrinsics.areEqual(it, modulePath) && StringsKt.startsWith$default(modulePath, it, false, 2, (Object)null)) {
+                                 var73 = false;
+                                 break;
+                              }
+                           }
+                        }
+
+                        if (var73) {
+                           destination$iv$iv.add(element$iv$iv);
+                        }
+                     }
+
+                     List topLevelModulePaths = (List)destination$iv$iv;
+                     Collection $this$toTypedArray$iv = (Collection)topLevelModulePaths;
+                     $i$f$filter = 0;
+                     pluginService.setWorkspacePaths((String[])$this$toTypedArray$iv.toArray(new String[0]));
+                  }
+
+                  EditorFactory.getInstance().getEventMulticaster().addSelectionListener((SelectionListener)listener, (Disposable)ContinuePluginDisposable.Companion.getInstance(project));
+                  CoreMessengerManager coreMessengerManager = new CoreMessengerManager(project, ideProtocolClient, coroutineScope);
+                  continuePluginService.setCoreMessengerManager(coreMessengerManager);
+                  return Unit.INSTANCE;
+               default:
+                  throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
             }
+         }
 
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
+         public final Continuation create(Object value, Continuation $completion) {
+            return (Continuation)(new <anonymous constructor>($completion));
+         }
 
-    private String getTutorialFileName() {
-        String appName = "eclipse"; // 시작할 때 이 값을 설정할 때 주의하기 바랍니다. 또는 디스패치 시스템을 통해 동적으로 받아야 합니다.
-        return switch (appName.toLowerCase()) {
-            case "intellij" -> "continue_tutorial.java";
-            case "pycharm" -> "continue_tutorial.py";
-            case "webstorm" -> "continue_tutorial.ts";
-            default -> "continue_tutorial.py"; // 기본값으로 Python 튜토리얼.
-        };
-    }
+         public final Object invoke(CoroutineScope p1, Continuation p2) {
+            return ((<undefinedtype>)this.create(p1, p2)).invokeSuspend(Unit.INSTANCE);
+         }
 
-    // 자신이 작성한 ModuleManager, ModuleRootManager, LafManagerListener 등을 대체하거나 구현해야 합니다.
-    // 주언의 대부분의 기능은 Eclipse의 제공하는 API나 기능으로 재구성되어야 합니다.
+         private static final void invokeSuspend$lambda$0(ContinuePluginService $continuePluginService, LafManager it) {
+            Map colors = (new GetTheme()).getTheme();
+            Intrinsics.checkNotNull($continuePluginService);
+            ContinuePluginService.sendToWebview$default($continuePluginService, "jetbrains/setColors", colors, (String)null, 4, (Object)null);
+         }
+
+         // $FF: synthetic method
+         // $FF: bridge method
+         public Object invoke(Object p1, Object p2) {
+            return this.invoke((CoroutineScope)p1, (Continuation)p2);
+         }
+      }, 3, (Object)null);
+   }
 }

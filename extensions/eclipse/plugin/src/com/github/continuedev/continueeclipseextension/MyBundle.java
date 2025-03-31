@@ -1,22 +1,38 @@
 package com.github.continuedev.continueeclipseextension;
 
-import org.eclipse.osgi.util.NLS;
+import com.intellij.DynamicBundle;
+import java.util.Arrays;
+import java.util.function.Supplier;
+import kotlin.jvm.JvmStatic;
+import kotlin.jvm.internal.Intrinsics;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.PropertyKey;
 
-public class MyBundle extends NLS {
-    private static final String BUNDLE_NAME = "messages.MyBundle"; // messages.properties 파일 이름
-    public static String someMessageKey; // 메시지 키를 정적 필드로 정의 해야 합니다.
-
-    static {
-        // 클래스 로딩 시점에 초기화
-        NLS.initializeMessages(BUNDLE_NAME, MyBundle.class);
-    }
-
-    private MyBundle() {
-        // 생성자를 private으로 정의하여 인스턴스화 방지
-    }
-
-    public static String message(String key, Object... params) {
-        // 메시지와 파라미터를 포맷팅합니다.
-        return String.format(NLS.bind(getMessage(key), params));
-    }
+public final class MyBundle extends DynamicBundle {
+	@NotNull
+	public static final MyBundle INSTANCE = new MyBundle();
+	
+	private MyBundle() {
+	   super("messages.MyBundle");
+	}
+	
+	@JvmStatic
+	@NotNull
+	public static final String message(@PropertyKey(resourceBundle = "messages.MyBundle") @NotNull String key, @NotNull Object... params) {
+	   Intrinsics.checkNotNullParameter(key, "key");
+	   Intrinsics.checkNotNullParameter(params, "params");
+	   String var2 = INSTANCE.getMessage(key, Arrays.copyOf(params, params.length));
+	   Intrinsics.checkNotNullExpressionValue(var2, "getMessage(...)");
+	   return var2;
+	}
+	
+	@JvmStatic
+	@NotNull
+	public static final Supplier messagePointer(@PropertyKey(resourceBundle = "messages.MyBundle") @NotNull String key, @NotNull Object... params) {
+	   Intrinsics.checkNotNullParameter(key, "key");
+	   Intrinsics.checkNotNullParameter(params, "params");
+	   Supplier var2 = INSTANCE.getLazyMessage(key, Arrays.copyOf(params, params.length));
+	   Intrinsics.checkNotNullExpressionValue(var2, "getLazyMessage(...)");
+	   return var2;
+	}
 }

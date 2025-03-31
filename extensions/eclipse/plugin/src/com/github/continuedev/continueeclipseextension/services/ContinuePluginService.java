@@ -4,58 +4,136 @@ import com.github.continuedev.continueeclipseextension.CoreMessenger;
 import com.github.continuedev.continueeclipseextension.CoreMessengerManager;
 import com.github.continuedev.continueeclipseextension.DiffManager;
 import com.github.continuedev.continueeclipseextension.IdeProtocolClient;
-import com.github.continuedev.continueeclipseextension.utils.Utils;
+import com.github.continuedev.continueeclipseextension.toolWindow.ContinueBrowser;
+import com.github.continuedev.continueeclipseextension.toolWindow.ContinuePluginToolWindowFactory;
+import com.github.continuedev.continueeclipseextension.utils.UtilsKt;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.components.Service;
+import com.intellij.openapi.components.Service.Level;
+import com.intellij.openapi.project.DumbAware;
+import java.util.concurrent.CancellationException;
+import kotlin.coroutines.CoroutineContext;
+import kotlin.jvm.internal.Intrinsics;
+import kotlinx.coroutines.CoroutineScope;
+import kotlinx.coroutines.CoroutineScopeKt;
+import kotlinx.coroutines.Dispatchers;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-import org.eclipse.core.runtime.PlatformObject;
-import org.eclipse.ui.part.ViewPart;
+@Service({Level.PROJECT})
+public final class ContinuePluginService implements Disposable, DumbAware {
+   @NotNull
+   private final CoroutineScope coroutineScope = CoroutineScopeKt.CoroutineScope((CoroutineContext)Dispatchers.getMain());
+   @Nullable
+   private ContinuePluginToolWindowFactory.ContinuePluginWindow continuePluginWindow;
+   @Nullable
+   private IdeProtocolClient ideProtocolClient;
+   @Nullable
+   private CoreMessengerManager coreMessengerManager;
+   @Nullable
+   private String[] workspacePaths;
+   @NotNull
+   private String windowId = UtilsKt.uuid();
+   @Nullable
+   private DiffManager diffManager;
 
-public class ContinuePluginService extends PlatformObject implements ViewPart.IDisposable {
-    private final java.util.UUID windowId;
-    private ContinuePluginWindow continuePluginWindow;
-    private IdeProtocolClient ideProtocolClient;
-    private CoreMessengerManager coreMessengerManager;
-    private String[] workspacePaths;
-    private DiffManager diffManager;
+   @Nullable
+   public final ContinuePluginToolWindowFactory.ContinuePluginWindow getContinuePluginWindow() {
+      return this.continuePluginWindow;
+   }
 
-    public ContinuePluginService() {
-        windowId = Utils.uuid();
-    }
+   public final void setContinuePluginWindow(@Nullable ContinuePluginToolWindowFactory.ContinuePluginWindow var1) {
+      this.continuePluginWindow = var1;
+   }
 
-    public CoreMessenger getCoreMessenger() {
-        return coreMessengerManager != null ? coreMessengerManager.getCoreMessenger() : null;
-    }
+   @Nullable
+   public final IdeProtocolClient getIdeProtocolClient() {
+      return this.ideProtocolClient;
+   }
 
-    @Override
-    public void dispose() {
-        if (coreMessengerManager != null && coreMessengerManager.getCoreMessenger() != null) {
-            coreMessengerManager.getCoreMessenger().killSubProcess();
-        }
-        // Eclipse에는 코루틴이 없으므로 coroutineScope.cancel()과 같은 부분은 제외했습니다.
-    }
+   public final void setIdeProtocolClient(@Nullable IdeProtocolClient var1) {
+      this.ideProtocolClient = var1;
+   }
 
-    public void sendToWebview(String messageType, Object data, String messageId) {
-        if (messageId == null || messageId.isEmpty()) {
-            messageId = Utils.uuid().toString();
-        }
-        if (continuePluginWindow != null && continuePluginWindow.getBrowser() != null) {
-            continuePluginWindow.getBrowser().sendToWebview(messageType, data, messageId);
-        }
-    }
+   @Nullable
+   public final CoreMessengerManager getCoreMessengerManager() {
+      return this.coreMessengerManager;
+   }
 
-    // Eclipse에서 필요한 메서드들을 추가해야 합니다.
-    @Override
-    public void init(org.eclipse.ui.IViewSite site) throws org.eclipse.ui.PartInitException {
-        super.init(site);
-        // 초기화 로직을 여기에 추가하세요.
-    }
+   public final void setCoreMessengerManager(@Nullable CoreMessengerManager var1) {
+      this.coreMessengerManager = var1;
+   }
 
-    @Override
-    public void createPartControl(org.eclipse.swt.widgets.Composite parent) {
-        // 파트 컨트롤 생성 로직을 여기에 추가하세요.
-    }
+   @Nullable
+   public final CoreMessenger getCoreMessenger() {
+      CoreMessengerManager var1 = this.coreMessengerManager;
+      return var1 != null ? var1.getCoreMessenger() : null;
+   }
 
-    @Override
-    public void setFocus() {
-        // 포커스 설정 로직을 여기에 추가하세요.
-    }
+   @Nullable
+   public final String[] getWorkspacePaths() {
+      return this.workspacePaths;
+   }
+
+   public final void setWorkspacePaths(@Nullable String[] var1) {
+      this.workspacePaths = var1;
+   }
+
+   @NotNull
+   public final String getWindowId() {
+      return this.windowId;
+   }
+
+   public final void setWindowId(@NotNull String var1) {
+      Intrinsics.checkNotNullParameter(var1, "<set-?>");
+      this.windowId = var1;
+   }
+
+   @Nullable
+   public final DiffManager getDiffManager() {
+      return this.diffManager;
+   }
+
+   public final void setDiffManager(@Nullable DiffManager var1) {
+      this.diffManager = var1;
+   }
+
+   public void dispose() {
+      CoroutineScopeKt.cancel$default(this.coroutineScope, (CancellationException)null, 1, (Object)null);
+      CoreMessenger var1 = this.getCoreMessenger();
+      if (var1 != null) {
+         CoroutineScope it = var1.getCoroutineScope();
+         if (it != null) {
+            int var5 = 0;
+            CoroutineScopeKt.cancel$default(it, (CancellationException)null, 1, (Object)null);
+            CoreMessenger var6 = this.getCoreMessenger();
+            if (var6 != null) {
+               var6.killSubProcess();
+            }
+         }
+      }
+
+   }
+
+   public final void sendToWebview(@NotNull String messageType, @Nullable Object data, @NotNull String messageId) {
+      Intrinsics.checkNotNullParameter(messageType, "messageType");
+      Intrinsics.checkNotNullParameter(messageId, "messageId");
+      ContinuePluginToolWindowFactory.ContinuePluginWindow var4 = this.continuePluginWindow;
+      if (var4 != null) {
+         ContinueBrowser var5 = var4.getBrowser();
+         if (var5 != null) {
+            var5.sendToWebview(messageType, data, messageId);
+         }
+      }
+
+   }
+
+   // $FF: synthetic method
+   public static void sendToWebview$default(ContinuePluginService var0, String var1, Object var2, String var3, int var4, Object var5) {
+      if ((var4 & 4) != 0) {
+         var3 = UtilsKt.uuid();
+      }
+
+      var0.sendToWebview(var1, var2, var3);
+   }
 }

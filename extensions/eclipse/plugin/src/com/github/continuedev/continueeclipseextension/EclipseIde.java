@@ -1,19 +1,24 @@
 package com.github.continuedev.continueeclipseextension;
 
-import com.github.continuedev.continueeclipseextension.Types.ContinueRcJson;
-import com.github.continuedev.continueeclipseextension.Types.GetGhTokenArgs;
-import com.github.continuedev.continueeclipseextension.Types.IDE;
-import com.github.continuedev.continueeclipseextension.Types.IdeCallback;
-import com.github.continuedev.continueeclipseextension.Types.IdeInfo;
-import com.github.continuedev.continueeclipseextension.Types.IdeSettings;
-import com.github.continuedev.continueeclipseextension.Types.IdeType;
-import com.github.continuedev.continueeclipseextension.Types.Location;
-import com.github.continuedev.continueeclipseextension.Types.Range;
-import com.github.continuedev.continueeclipseextension.Types.RangeInFile;
-import com.github.continuedev.continueeclipseextension.Types.ToastType;
+import com.github.continuedev.continueeclipseextension.type.ContinueRcJson;
+import com.github.continuedev.continueeclipseextension.type.GetGhTokenArgs;
+import com.github.continuedev.continueeclipseextension.type.IDE;
+import com.github.continuedev.continueeclipseextension.type.IdeCallback;
+import com.github.continuedev.continueeclipseextension.type.IdeInfo;
+import com.github.continuedev.continueeclipseextension.type.IdeSettings;
+import com.github.continuedev.continueeclipseextension.type.IdeType;
+import com.github.continuedev.continueeclipseextension.type.Location;
+import com.github.continuedev.continueeclipseextension.type.Range;
+import com.github.continuedev.continueeclipseextension.type.RangeInFile;
+import com.github.continuedev.continueeclipseextension.type.ToastType;
 import com.github.continuedev.continueeclipseextension.constants.GetContinueGlobalPath;
 import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
 import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
+import com.github.continuedev.continueeclipseextension.type.FileStats;
+import com.github.continuedev.continueeclipseextension.type.IndexTag;
+import com.github.continuedev.continueeclipseextension.type.Position;
+import com.github.continuedev.continueeclipseextension.type.Problem;
+import com.github.continuedev.continueeclipseextension.type.Thread;
 import com.github.continuedev.continueeclipseextension.utils.Utils.OS;
 import com.github.continuedev.continueeclipseextension.utils.Utils;
 import com.google.gson.Gson;
@@ -55,7 +60,7 @@ public class EclipseIde implements IDE {
             throw new Exception("Plugin not found");
         }
 
-        URL rgUrl = FileLocator.find(bundle, new Path("ripgrep/bin/rg" + (OS.WINDOWS ? ".exe" : "")), null);
+        URL rgUrl = FileLocator.find(bundle, new Path("ripgrep/bin/rg" + (OS.WINDOWS != null ? ".exe" : "")), null);
         URI rgUri = FileLocator.resolve(rgUrl).toURI();
         ripgrep = rgUri.getPath();
     }

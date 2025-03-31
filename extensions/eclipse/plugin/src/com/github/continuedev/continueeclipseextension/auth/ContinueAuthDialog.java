@@ -3,48 +3,51 @@ package com.github.continuedev.continueeclipseextension.auth;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextField;
-
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.LayoutManager;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
-import java.awt.BorderLayout;
+import kotlin.jvm.functions.Function1;
+import kotlin.jvm.internal.Intrinsics;
+import kotlin.text.StringsKt;
+import org.jetbrains.annotations.NotNull;
 
-public class ContinueAuthDialog extends DialogWrapper {
-    private final boolean useOnboarding;
-    private final OnTokenEnteredListener onTokenEnteredListener;
-    private JBTextField tokenField;
+public final class ContinueAuthDialog extends DialogWrapper {
+   private final boolean useOnboarding;
+   @NotNull
+   private final Function1 onTokenEntered;
+   @NotNull
+   private final JBTextField tokenField;
 
-    interface OnTokenEnteredListener {
-        void onTokenEntered(String token);
-    }
+   public ContinueAuthDialog(boolean useOnboarding, @NotNull Function1 onTokenEntered) {
+      Intrinsics.checkNotNullParameter(onTokenEntered, "onTokenEntered");
+      super(true);
+      this.useOnboarding = useOnboarding;
+      this.onTokenEntered = onTokenEntered;
+      this.tokenField = new JBTextField();
+      this.init();
+      this.setTitle("Continue authentication");
+   }
 
-    public ContinueAuthDialog(boolean useOnboarding, OnTokenEnteredListener onTokenEnteredListener) {
-        super(true);
-        this.useOnboarding = useOnboarding;
-        this.onTokenEnteredListener = onTokenEnteredListener;
-        this.tokenField = new JBTextField();
-        this.init();
-        setTitle("Continue authentication");
-    }
+   @NotNull
+   protected JComponent createCenterPanel() {
+      JPanel panel = new JPanel((LayoutManager)(new BorderLayout()));
+      String message = this.useOnboarding ? "After onboarding you will be shown an authentication token. Please enter it here:" : "Please enter your Continue authentication token:";
+      panel.add((Component)(new JBLabel(message)), "North");
+      panel.add((Component)this.tokenField, "Center");
+      return (JComponent)panel;
+   }
 
-    @Override
-    protected JComponent createCenterPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        String message = useOnboarding ? 
-            "후보딩을 완료하면 인증 토큰이 표시됩니다. 여기에 입력해주세요:" : 
-            "Continue 인증 토큰을 입력해주세요:";
-        panel.add(new JBLabel(message), BorderLayout.NORTH);
-        panel.add(tokenField, BorderLayout.CENTER);
-        return panel;
-    }
+   protected void doOKAction() {
+      String token = this.tokenField.getText();
+      Intrinsics.checkNotNull(token);
+      if (!StringsKt.isBlank((CharSequence)token)) {
+         this.onTokenEntered.invoke(token);
+         super.doOKAction();
+      } else {
+         this.setErrorText("Please enter a valid token");
+      }
 
-    @Override
-    protected void doOKAction() {
-        String token = tokenField.getText();
-        if (!token.trim().isEmpty()) {
-            onTokenEnteredListener.onTokenEntered(token);
-            super.doOKAction();
-        } else {
-            setErrorText("유효한 토큰을 입력해주세요");
-        }
-    }
+   }
 }

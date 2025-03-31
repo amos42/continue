@@ -1,0 +1,4 @@
+name: convert to eclipse
+description: convert to eclipse
+---
+intelliJ extension용 kotlin 코드를 eclipse extension용 java 코드로 변경해 줘. init 지시자는 생성자에 포함된다.

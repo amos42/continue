@@ -1,66 +1,68 @@
 package com.github.continuedev.continueeclipseextension.actions;
 
-import org.eclipse.core.commands.ExecutionEvent;
-import org.eclipse.core.commands.ExecutionException;
-import org.eclipse.core.commands.IHandler;
-import org.eclipse.core.commands.IHandlerListener;
-import org.eclipse.jface.text.contentassist.ICompletionProposal;
-import org.eclipse.jface.text.contentassist.IContentAssistant;
-import org.eclipse.jface.text.source.SourceViewer;
-import org.eclipse.ui.texteditor.ITextEditor;
-import org.eclipse.ui.part.EditorPart;
-
+import com.github.continuedev.continueeclipseextension.autocomplete.AcceptAutocompleteAction;
+import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
+import com.intellij.openapi.actionSystem.ActionPromoter;
+import com.intellij.openapi.actionSystem.AnAction;
+import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.openapi.components.ServiceManager;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
+import kotlin.jvm.internal.Intrinsics;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
-public class ContinueActionPromote implements IHandler {
+public final class ContinueActionPromote implements ActionPromoter {
+   @Nullable
+   public List promote(@NotNull List actions, @NotNull DataContext context) {
+      Intrinsics.checkNotNullParameter(actions, "actions");
+      Intrinsics.checkNotNullParameter(context, "context");
+      Iterable $this$none$iv = (Iterable)actions;
+      int $i$f$none = 0;
+      boolean var10000;
+      if ($this$none$iv instanceof Collection && ((Collection)$this$none$iv).isEmpty()) {
+         var10000 = true;
+      } else {
+         Iterator $i$f$filterIsInstance = $this$none$iv.iterator();
 
-    @Override
-    public void addHandlerListener(@NotNull IHandlerListener handlerListener) {
-        // 필요에 따라 구현
-    }
-
-    @Override
-    public void removeHandlerListener(@NotNull IHandlerListener handlerListener) {
-        // 필요에 따라 구현
-    }
-
-    @Override
-    public Object execute(@NotNull ExecutionEvent event) throws ExecutionException {
-        // 이 부분은 실제 동작을 위해 구현해야 합니다.
-        // 예를 들어, Autocomplete 액션을 실현하거나 체크할 논리가 들어갑니다.
-        ITextEditor textEditor = (ITextEditor) EditorPart.getActiveEditor();
-        SourceViewer sourceViewer = (SourceViewer) textEditor.getAdapter(SourceViewer.class);
-        IContentAssistant contentAssistant = sourceViewer.getContentAssistant();
-
-        if (contentAssistant != null) {
-            List<ICompletionProposal> proposals = contentAssistant.computeCompletionProposals(sourceViewer.getDocument(), sourceViewer.getTextWidget().getCaretOffset());
-            for (ICompletionProposal proposal : proposals) {
-                // AcceptAutocompleteAction에 해당하는 조건을 체크
-                if (proposal instanceof AcceptAutocompleteAction) {
-                    ContinueExtensionSettings settings = ContinueExtensionSettings.getInstance();
-                    if (settings.isContinueStateShowIDECompletionSideBySide()) {
-                        // 특정 동작 수행
-                    }
-                }
+         while(true) {
+            if (!$i$f$filterIsInstance.hasNext()) {
+               var10000 = true;
+               break;
             }
-        }
-        return null;
-    }
 
-    @Override
-    public boolean isEnabled() {
-        // 필요에 따라 활성화 조건 구현
-        return true;
-    }
+            Object element$iv = $i$f$filterIsInstance.next();
+            AnAction it = (AnAction)element$iv;
+            int $i$f$filterIsInstanceTo = 0;
+            if (it instanceof AcceptAutocompleteAction) {
+               var10000 = false;
+               break;
+            }
+         }
+      }
 
-    @Override
-    public boolean isHandled() {
-        // 필요에 따라 처리 여부 구현
-        return true;
-    }
+      if (var10000) {
+         return null;
+      } else {
+         ContinueExtensionSettings settings = (ContinueExtensionSettings)ServiceManager.getService(ContinueExtensionSettings.class);
+         if (!settings.getContinueState().getShowIDECompletionSideBySide()) {
+            return null;
+         } else {
+            Iterable $this$filterIsInstance$iv = (Iterable)actions;
+            int $i$f$filterIsInstance = 0;
+            Collection destination$iv$iv = (Collection)(new ArrayList());
+            int $i$f$filterIsInstanceTo = 0;
 
-    @Override
-    public void dispose() {
-        // 필요에 따라 자원 해제 구현
-    }
+            for(Object element$iv$iv : $this$filterIsInstance$iv) {
+               if (element$iv$iv instanceof AcceptAutocompleteAction) {
+                  destination$iv$iv.add(element$iv$iv);
+               }
+            }
+
+            return (List)destination$iv$iv;
+         }
+      }
+   }
 }

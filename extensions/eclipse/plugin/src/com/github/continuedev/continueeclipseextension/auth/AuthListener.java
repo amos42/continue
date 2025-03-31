@@ -1,21 +1,36 @@
 package com.github.continuedev.continueeclipseextension.auth;
 
-import org.eclipse.core.runtime.IExtensionRegistry;
-import org.eclipse.core.runtime.Platform;
-import org.eclipse.ui.PlatformUI;
+import com.intellij.util.messages.Topic;
+import kotlin.jvm.internal.Intrinsics;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public interface AuthListener {
-    void startAuthFlow();
+   @NotNull
+   Companion Companion = AuthListener.Companion.$$INSTANCE;
 
-    void handleUpdatedSessionInfo(ControlPlaneSessionInfo sessionInfo);
+   void startAuthFlow();
 
-    class AuthListenerHelper {
-        public static final String TOPIC_ID = "com.github.continuedev.continueintellijextension.auth.StartAuthFlow";
+   void handleUpdatedSessionInfo(@Nullable ControlPlaneSessionInfo var1);
 
-        public static org.eclipse.jface.util.ListenerList<AuthListener> getTopic() {
-            // Eclipse에서 로컬로 ListenerList를 사용하거나,
-            // 다른 방식으로 이벤트 메커니즘을 구현해야 합니다.
-            return new org.eclipse.jface.util.ListenerList<>();
-        }
-    }
+   public static final class Companion {
+      // $FF: synthetic field
+      static final Companion $$INSTANCE = new Companion();
+      @NotNull
+      private static final Topic TOPIC;
+
+      private Companion() {
+      }
+
+      @NotNull
+      public final Topic getTOPIC() {
+         return TOPIC;
+      }
+
+      static {
+         Topic var0 = Topic.create("StartAuthFlow", AuthListener.class);
+         Intrinsics.checkNotNullExpressionValue(var0, "create(...)");
+         TOPIC = var0;
+      }
+   }
 }

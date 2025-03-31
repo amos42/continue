@@ -4,6 +4,7 @@ import com.github.continuedev.continueeclipseextension.constants.MessageTypes;
 import com.github.continuedev.continueeclipseextension.services.ContinueExtensionSettings;
 import com.github.continuedev.continueeclipseextension.services.ContinuePluginService;
 import com.github.continuedev.continueeclipseextension.services.TelemetryService;
+import com.github.continuedev.continueeclipseextension.type.Thread;
 import com.github.continuedev.continueeclipseextension.utils.uuid;
 import com.google.gson.Gson;
 

@@ -11,7 +11,7 @@ import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.messages.Topic
-import kotlinx.serialization.Serializable
+//import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -75,7 +75,7 @@ class ContinueSettingsComponent : DumbAware {
     }
 }
 
-@Serializable
+//@Serializable
 class ContinueRemoteConfigSyncResponse {
     var configJson: String? = null
     var configJs: String? = null

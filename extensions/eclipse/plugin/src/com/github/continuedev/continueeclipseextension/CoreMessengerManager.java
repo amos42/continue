@@ -1,6 +1,7 @@
 package com.github.continuedev.continueeclipseextension;
 
 import com.github.continuedev.continueeclipseextension.services.TelemetryService;
+import com.github.continuedev.continueeclipseextension.type.Thread;
 import com.github.continuedev.continueeclipseextension.utils.*;
 import com.intellij.ide.plugins.PluginManager;
 import com.intellij.openapi.components.service;
